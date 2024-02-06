@@ -241,6 +241,104 @@ namespace cauldron
         delete pCmdList;
     }
 
+    void SwapChainInternal::CopyResourceToCPU(const GPUResource* pResourceConst, void* pDst)
+    {
+        D3D12_RESOURCE_DESC fromDesc  = pResourceConst->GetImpl()->DX12Desc();
+        GPUResource*        pResource = const_cast<GPUResource*>(pResourceConst);
+        CommandList*        pCmdList  = GetDevice()->CreateCommandList(L"ResourceToCPU", CommandQueue::Graphics);
+        ResourceFormat      format    = pResource->GetTextureResource()->GetFormat();
+
+        // Create a staging resource
+        ID3D12Resource* pStagingResource = nullptr;
+
+        D3D12_RESOURCE_DESC bufferDesc = {};
+        bufferDesc.Alignment           = 0;
+        bufferDesc.DepthOrArraySize    = 1;
+        bufferDesc.Dimension           = D3D12_RESOURCE_DIMENSION_BUFFER;
+        bufferDesc.Flags               = D3D12_RESOURCE_FLAG_NONE;
+        bufferDesc.Format              = DXGI_FORMAT_UNKNOWN;
+        bufferDesc.Height              = 1;
+        bufferDesc.Width               = fromDesc.Width * fromDesc.Height * GetResourceFormatStride(format);
+        bufferDesc.Layout              = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        bufferDesc.MipLevels           = 1;
+        bufferDesc.SampleDesc.Count    = 1;
+        bufferDesc.SampleDesc.Quality  = 0;
+
+        HRESULT hr = GetDevice()->GetImpl()->DX12Device()->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK),
+                                                                                   D3D12_HEAP_FLAG_NONE,
+                                                                                   &bufferDesc,
+                                                                                   D3D12_RESOURCE_STATE_COPY_DEST,
+                                                                                   nullptr,
+                                                                                   IID_PPV_ARGS(&pStagingResource));
+
+        if (FAILED(hr))
+        {
+            // Handle error
+            return;
+        }
+
+        // Transition the resource to copy source
+        Barrier barrier = Barrier::Transition(pResource, ResourceState::ShaderResource, ResourceState::CopySource);
+        ResourceBarrier(pCmdList, 1, &barrier);
+
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout[1]             = {0};
+        uint32_t                           num_rows[1]           = {0};
+        UINT64                             row_sizes_in_bytes[1] = {0};
+        UINT64                             uploadHeapSize        = 0;
+        GetDevice()->GetImpl()->DX12Device()->GetCopyableFootprints(&fromDesc, 0, 1, 0, layout, num_rows, row_sizes_in_bytes, &uploadHeapSize);
+
+        CD3DX12_TEXTURE_COPY_LOCATION copyDest(pStagingResource, layout[0]);
+        CD3DX12_TEXTURE_COPY_LOCATION copySrc(pResource->GetImpl()->DX12Resource(), 0);
+        pCmdList->GetImpl()->DX12CmdList()->CopyTextureRegion(&copyDest, 0, 0, 0, &copySrc, nullptr);
+
+        ID3D12Fence* pFence;
+        CauldronThrowOnFail(GetDevice()->GetImpl()->DX12Device()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));
+        CauldronThrowOnFail(GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->Signal(pFence, 1));
+        CauldronThrowOnFail(pCmdList->GetImpl()->DX12CmdList()->Close());
+
+        ID3D12CommandList* CmdListList[] = {pCmdList->GetImpl()->DX12CmdList()};
+        GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->ExecuteCommandLists(1, CmdListList);
+
+        // Wait for fence
+        HANDLE mHandleFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        pFence->SetEventOnCompletion(1, mHandleFenceEvent);
+        WaitForSingleObject(mHandleFenceEvent, INFINITE);
+        CloseHandle(mHandleFenceEvent);
+        pFence->Release();
+
+        UINT64*     pData = NULL;
+        D3D12_RANGE range;
+        range.Begin = 0;
+        range.End   = uploadHeapSize;
+        hr          = pStagingResource->Map(0, &range, reinterpret_cast<void**>(&pData));
+
+        // Copy the data to the destination pointer
+        if (SUCCEEDED(hr))
+        {
+            // Set the destination memory free
+            SecureZeroMemory(pDst, uploadHeapSize);
+
+            // Copy memory to destination
+            memcpy(pDst, pData, uploadHeapSize);
+
+            // Set the source memory free (prevent optimization)
+            SecureZeroMemory(pData, uploadHeapSize);
+        }
+
+        pStagingResource->Unmap(0, NULL);
+
+        // Transition the resource back to its original state
+        barrier = Barrier::Transition(pResource, ResourceState::CopySource, ResourceState::ShaderResource);
+        ResourceBarrier(pCmdList, 1, &barrier);
+
+        GetDevice()->FlushAllCommandQueues();
+
+        // Release
+        pStagingResource->Release();
+        pStagingResource = nullptr;
+        delete pCmdList;
+    }
+
     void SwapChainInternal::FindCurrentOutput()
     {
         const HWND hWnd = GetFramework()->GetInternal()->GetHWND();

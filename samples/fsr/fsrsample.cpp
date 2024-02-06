@@ -24,6 +24,7 @@
 #include "fsr2rendermodule.h"
 #include "fsr3upscalerendermodule.h"
 #include "fsr3rendermodule.h"
+#include "fsrremoterendermodule.h"
 #include "upscalerendermodule.h"
 #include "fsr1rendermodule.h"
 #include "upscalerendermodule.h"
@@ -65,6 +66,7 @@ void FSRSample::RegisterSampleModules()
     rendermodule::RegisterAvailableRenderModules();
 
     // Register sample render modules
+    RenderModuleFactory::RegisterModule<FSRRemoteRenderModule>("FSRRemoteRenderModule");
     RenderModuleFactory::RegisterModule<FSR3RenderModule>("FSR3RenderModule");
     RenderModuleFactory::RegisterModule<FSR3UpscaleRenderModule>("FSR3UpscaleRenderModule");
     RenderModuleFactory::RegisterModule<FSR2RenderModule>("FSR2RenderModule");
@@ -79,6 +81,7 @@ int32_t FSRSample::DoSampleInit()
     m_pFSR2RenderModule = static_cast<FSR2RenderModule*>(GetFramework()->GetRenderModule("FSR2RenderModule"));
     m_pFSR3UpscaleRenderModule = static_cast<FSR3UpscaleRenderModule*>(GetFramework()->GetRenderModule("FSR3UpscaleRenderModule"));
     m_pFSR3RenderModule = static_cast<FSR3RenderModule*>(GetFramework()->GetRenderModule("FSR3RenderModule"));
+    m_pFSRRemoteRenderModule = static_cast<FSRRemoteRenderModule*>(GetFramework()->GetRenderModule("FSRRemoteRenderModule"));
 
     m_pFSR1RenderModule = static_cast<FSR1RenderModule*>(GetFramework()->GetRenderModule("FSR1RenderModule"));
     m_pUpscaleRenderModule = static_cast<UpscaleRenderModule*>(GetFramework()->GetRenderModule("UpscaleRenderModule"));
@@ -89,6 +92,7 @@ int32_t FSRSample::DoSampleInit()
 
     CauldronAssert(ASSERT_CRITICAL, m_pFSR3RenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR3 render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pFSR3UpscaleRenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR3Upscale render module.");
+    CauldronAssert(ASSERT_CRITICAL, m_pFSRRemoteRenderModule, L"FidelityFX FSR Sample: Error: Could not find FSRRemote render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pFSR2RenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR2 render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pFSR1RenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR1 render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pUpscaleRenderModule, L"FidelityFX FSR Sample: Error: Could not find upscale render module.");
@@ -121,7 +125,7 @@ int32_t FSRSample::DoSampleInit()
 
 #ifdef FFX_API_DX12
     // Setup upscale method options
-    const char*              upscalers[] = {"Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2", "FSR3Upscale", "FSR3"};
+    const char* upscalers[] = { "Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2", "FSR3Upscale", "FSR3", "FSRRemote" };
     std::vector<std::string> comboOptions;
     comboOptions.assign(upscalers, upscalers + _countof(upscalers));
 
@@ -130,7 +134,7 @@ int32_t FSRSample::DoSampleInit()
     GetUIManager()->RegisterUIElements(uiSection);
 
     // Setup FSR3 as the default upscaler
-    m_UIMethod = UpscaleMethod::FSR3;
+    m_UIMethod = UpscaleMethod::FSRRemote;
 #else
     // Setup upscale method options
     const char*              upscalers[] = {"Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2"};
@@ -192,6 +196,9 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
     case UpscaleMethod::FSR3:
         m_pCurrentUpscaler = m_pFSR3RenderModule;
         m_pFSR3RenderModule->m_NeedReInit = false;
+        break;
+    case UpscaleMethod::FSRRemote:
+        m_pCurrentUpscaler = m_pFSRRemoteRenderModule;
         break;
     default:
         CauldronCritical(L"Unsupported upscaler requested.");

@@ -24,6 +24,7 @@
 
 #include "core/framework.h"
 
+class FSRRemoteRenderModule;
 class FSR3RenderModule;
 class FSR3UpscaleRenderModule;
 class FSR2RenderModule;
@@ -80,6 +81,7 @@ private:
         FSR2,
         FSR3UPSCALEONLY,
         FSR3,
+        FSRRemote,
 
         Count
     };
@@ -90,6 +92,7 @@ private:
     UpscaleMethod m_UIMethod = UpscaleMethod::Native;
     cauldron::RenderModule* m_pCurrentUpscaler = nullptr;
 
+    FSRRemoteRenderModule*    m_pFSRRemoteRenderModule = nullptr;
     FSR3RenderModule*         m_pFSR3RenderModule = nullptr;
     FSR3UpscaleRenderModule*  m_pFSR3UpscaleRenderModule = nullptr;
     FSR2RenderModule*         m_pFSR2RenderModule = nullptr;

@@ -51,6 +51,7 @@
             "FSR2RenderModule",
             "FSR3UpscaleRenderModule",
             "FSR3RenderModule",
+            "FSRRemoteRenderModule",
             "UpscaleRenderModule",
             "ToneMappingRenderModule",
             "FSR1RenderModule"

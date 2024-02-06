@@ -130,6 +130,11 @@ namespace cauldron
         virtual void DumpSwapChainToFile(std::experimental::filesystem::path filePath) = 0;
 
         /**
+         * @brief   Copies the swap chain's back buffer to the CPU.
+         */
+        virtual void CopyResourceToCPU(const GPUResource* pResource, void* pDst) = 0;
+
+        /**
          * @brief   Verifies if requested display mode can be supported.
          */
         DisplayMode CheckAndGetDisplayModeRequested(DisplayMode DispMode);

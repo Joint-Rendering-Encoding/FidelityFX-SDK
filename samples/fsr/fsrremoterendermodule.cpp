@@ -71,7 +71,7 @@ void FSRRemoteRenderModule::OnResize(const ResolutionInfo& resInfo)
         return;
 }
 
-bool done = false;
+bool done         = false;
 int  captureFrame = 60;
 int  frameCounter = 0;
 void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
@@ -84,6 +84,9 @@ void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     if (done || frameCounter < captureFrame)
     {
         frameCounter++;
+
+        if (!done)
+            GetFramework()->GetSwapChain()->CopyDataToResource(m_pColorTarget->GetResource(), NULL);
     }
     else
     {

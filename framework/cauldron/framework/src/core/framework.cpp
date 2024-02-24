@@ -1487,6 +1487,8 @@ namespace cauldron
                 compMgrIter->second->UpdateComponents(m_DeltaTime);
         }
 
+        std::vector<std::wstring> renderModuleNames(30);
+
         // If the scene is not yet ready, skip to end frame
         if (m_pScene->IsReady())
         {
@@ -1504,6 +1506,15 @@ namespace cauldron
                 CPUScopedProfileCapture marker(L"RM Executes");
                 for (auto& callback : m_ExecutionCallbacks)
                 {
+                    // skip if it doesnt contain "remote"
+                    std::wstring name = callback.first;
+                    if (name.find(L"Remote") == std::string::npos && name.find(L"Swap") == std::string::npos && name.find(L"UI") == std::string::npos)
+                    {
+                        continue;
+                    }
+
+                    renderModuleNames.push_back(name);
+
                     if (callback.second.first->ModuleEnabled() && callback.second.first->ModuleReady())
                     {
                         m_pCmdListForFrame = m_pDevice->CreateCommandList(L"RenderModuleGraphicsCmdList", CommandQueue::Graphics);

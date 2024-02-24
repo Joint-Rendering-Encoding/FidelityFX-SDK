@@ -81,12 +81,14 @@ void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     UINT64              height   = fromDesc.Height;
     ResourceFormat      format   = m_pColorTarget->GetResource()->GetTextureResource()->GetFormat();
 
+    // GetFramework()->GetSwapChain()->CopyDataToResource(pCmdList, m_pColorTarget->GetResource(), NULL);
+
     if (done || frameCounter < captureFrame)
     {
         frameCounter++;
 
         if (!done)
-            GetFramework()->GetSwapChain()->CopyDataToResource(m_pColorTarget->GetResource(), NULL);
+            GetFramework()->GetSwapChain()->CopyDataToResource(pCmdList, m_pColorTarget->GetResource(), NULL);
     }
     else
     {

@@ -65,7 +65,7 @@ namespace cauldron
 
         void DumpSwapChainToFile(std::experimental::filesystem::path filePath) override;
         void CopyResourceToCPU(const GPUResource* pResource, void* pDst) override;
-        void CopyDataToResource(const GPUResource* pResourceConst, const void* pSrc) override;
+        void CopyDataToResource(void* pCmdListV, const GPUResource* pResourceConst, const void* pSrc) override;
 
         void EnumerateOutputs();
         void FindCurrentOutput();

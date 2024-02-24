@@ -339,12 +339,12 @@ namespace cauldron
         delete pCmdList;
     }
 
-    void SwapChainInternal::CopyDataToResource(const GPUResource* pResourceConst, const void* pSrc)
+    void SwapChainInternal::CopyDataToResource(void* pCmdListV, const GPUResource* pResourceConst, const void* pSrc)
     {
         GPUResource*        pResource = const_cast<GPUResource*>(pResourceConst);
         D3D12_RESOURCE_DESC toDesc    = pResource->GetImpl()->DX12Desc();
         ID3D12Device*       pDevice   = GetDevice()->GetImpl()->DX12Device();
-        CommandList*        pCmdList  = GetDevice()->CreateCommandList(L"ResourceToGPU", CommandQueue::Graphics);
+        CommandList*        pCmdList  = (CommandList*)pCmdListV; // GetDevice()->CreateCommandList(L"ResourceToGPU", CommandQueue::Graphics);
         ResourceFormat      format    = pResource->GetTextureResource()->GetFormat();
 
         // Create a staging resource
@@ -380,12 +380,14 @@ namespace cauldron
         {
             SecureZeroMemory(pData, bufferDesc.Width);
 
+            auto r = 0;
             for (UINT i = 0; i < toDesc.Height; i++)
             {
+                r++;
                 for (UINT j = 0; j < toDesc.Width; j++)
                 {
                     // just set 50, 50, 50, 255
-                    pData[i * toDesc.Width * 4 + j * 4 + 0] = 255;
+                    pData[i * toDesc.Width * 4 + j * 4 + 0] = r >= 255 ? 255 : r;
                     pData[i * toDesc.Width * 4 + j * 4 + 1] = 0;
                     pData[i * toDesc.Width * 4 + j * 4 + 2] = 0;
                     pData[i * toDesc.Width * 4 + j * 4 + 3] = 255;
@@ -469,6 +471,8 @@ namespace cauldron
 
             pCmdList->GetImpl()->DX12CmdList()->ResourceBarrier(1, &barrier);
         }
+
+        return;
 
         // Execute the command list
         ID3D12Fence* pFence;

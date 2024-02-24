@@ -137,7 +137,7 @@ namespace cauldron
         /**
          * @brief   Copies the given data to the Resource.
          */
-        virtual void CopyDataToResource(const GPUResource* pResourceConst, const void* pSrc) = 0;
+        virtual void CopyDataToResource(void* pCmdListV, const GPUResource* pResourceConst, const void* pSrc) = 0;
 
         /**
          * @brief   Verifies if requested display mode can be supported.

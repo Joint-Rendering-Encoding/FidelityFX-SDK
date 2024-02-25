@@ -17,25 +17,35 @@ void FSRRemoteRenderModule::Init(const json& initData)
     // Resource setup
 
     // Fetch needed resources
-    m_pColorTarget = GetFramework()->GetColorTargetForCallback(GetName());
-    switch (GetFramework()->GetSwapChain()->GetSwapChainDisplayMode())
-    {
-    case DisplayMode::DISPLAYMODE_LDR:
-        m_pColorTarget = GetFramework()->GetRenderTexture(L"LDR8Color");
-        break;
-    case DisplayMode::DISPLAYMODE_HDR10_2084:
-    case DisplayMode::DISPLAYMODE_FSHDR_2084:
-        m_pColorTarget = GetFramework()->GetRenderTexture(L"HDR10Color");
-        break;
-    case DisplayMode::DISPLAYMODE_HDR10_SCRGB:
-    case DisplayMode::DISPLAYMODE_FSHDR_SCRGB:
-        m_pColorTarget = GetFramework()->GetRenderTexture(L"HDR16Color");
-        break;
-    }
-    CauldronAssert(ASSERT_CRITICAL, m_pColorTarget, L"Could not get one of the needed resources for FSRRemote Rendermodule.");
+    m_pColorTarget     = GetFramework()->GetColorTargetForCallback(GetName());
+    m_pDepthTarget     = GetFramework()->GetRenderTexture(L"DepthTarget");
+    m_pMotionVectors   = GetFramework()->GetRenderTexture(L"GBufferMotionVectorRT");
+    m_pReactiveMask    = GetFramework()->GetRenderTexture(L"ReactiveMask");
+    m_pCompositionMask = GetFramework()->GetRenderTexture(L"TransCompMask");
 
-    // Start disabled as this will be enabled externally
-    SetModuleEnabled(false);
+    CauldronAssert(ASSERT_CRITICAL, m_pColorTarget, L"Could not get color target for FSR render modules");
+    CauldronAssert(ASSERT_CRITICAL, m_pDepthTarget, L"Could not get depth target for FSR render modules");
+    CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors, L"Could not get motion vectors for FSR render modules");
+    CauldronAssert(ASSERT_CRITICAL, m_pReactiveMask, L"Could not get reactive mask for FSR render modules");
+    CauldronAssert(ASSERT_CRITICAL, m_pCompositionMask, L"Could not get composition mask for FSR render modules");
+
+    // Check remote mode
+    m_RelayMode = initData.value("Mode", "Renderer") == "Relay";
+
+    // Relay mode is first in line by RenderModules order, but Renderer mode needs to be put in before SwapChainRenderModule explicitly
+    if (!m_RelayMode)
+    {
+        // Register the outbound data transfer callback
+        ExecuteCallback callbackPreSwap      = std::bind(&FSRRemoteRenderModule::OutboundDataTransfer, this, std::placeholders::_1, std::placeholders::_2);
+        ExecutionTuple  callbackPreSwapTuple = std::make_pair(L"FSRRemoteRenderModule::PreSwapChain", std::make_pair(this, callbackPreSwap));
+        GetFramework()->RegisterExecutionCallback(L"SwapChainRenderModule", true, callbackPreSwapTuple);
+    }
+
+    // Create DX12Ops
+    m_DX12Ops = DX12Ops();
+
+    // Module is always enabled
+    SetModuleEnabled(true);
 
     // That's all we need for now
     SetModuleReady(true);
@@ -45,24 +55,7 @@ FSRRemoteRenderModule::~FSRRemoteRenderModule()
 {
     // Protection
     if (ModuleEnabled())
-        EnableModule(false);  // Destroy FSR context
-}
-
-void FSRRemoteRenderModule::EnableModule(bool enabled)
-{
-    // If disabling the render module, we need to disable the upscaler with the framework
-    if (enabled)
-    {
-        // Toggle this now so we avoid the context changes in OnResize
-        SetModuleEnabled(enabled);
-    }
-    else
-    {
-        // Toggle this now so we avoid the context changes in OnResize
-        SetModuleEnabled(enabled);
-
-        GetFramework()->EnableUpscaling(false);
-    }
+        EnableModule(false);
 }
 
 void FSRRemoteRenderModule::OnResize(const ResolutionInfo& resInfo)
@@ -71,69 +64,68 @@ void FSRRemoteRenderModule::OnResize(const ResolutionInfo& resInfo)
         return;
 }
 
-bool done         = false;
-int  captureFrame = 60;
-int  frameCounter = 0;
 void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 {
-    D3D12_RESOURCE_DESC fromDesc = m_pColorTarget->GetResource()->GetImpl()->DX12Desc();
-    UINT64              width    = fromDesc.Width;
-    UINT64              height   = fromDesc.Height;
-    ResourceFormat      format   = m_pColorTarget->GetResource()->GetTextureResource()->GetFormat();
+    // Execute is only meaningful in relay mode, becuase this render module is always first in line
+    if (m_RelayMode)
+        InboundDataTransfer(deltaTime, pCmdList);
+}
 
-    // GetFramework()->GetSwapChain()->CopyDataToResource(pCmdList, m_pColorTarget->GetResource(), NULL);
+void FSRRemoteRenderModule::InboundDataTransfer(double deltaTime, CommandList* pCmdList)
+{
+    static uint8_t* data;
+    static size_t   dataSize;
 
-    if (done || frameCounter < captureFrame)
+    // Read the data from a file
+    if (data == nullptr)
     {
-        frameCounter++;
+        FILE* pFile = fopen("dump.bin", "rb");
+        fseek(pFile, 0, SEEK_END);
+        dataSize = ftell(pFile);
+        fseek(pFile, 0, SEEK_SET);
 
-        if (!done)
-            GetFramework()->GetSwapChain()->CopyDataToResource(pCmdList, m_pColorTarget->GetResource(), NULL);
+        data = new uint8_t[dataSize];
+        fread(data, 1, dataSize, pFile);
+        fclose(pFile);
     }
-    else
-    {
-        void* pCPUData = malloc(width * height * GetResourceFormatStride(format));
-        GetFramework()->GetSwapChain()->CopyResourceToCPU(m_pColorTarget->GetResource(), pCPUData);
 
-        // Write the data to a PGM file
-        std::ofstream pgmFile("output.pgm", std::ios::out | std::ios::binary);
-        if (!pgmFile)
-        {
-            Log::Write(LOGLEVEL_ERROR, L"Unable to open file for output");
-            return;
-        }
+    // Allocate the staging buffer if it doesn't exist
+    uint8_t* pResourceData = m_DX12Ops.GetStagingData();
+    if (pResourceData == nullptr)
+        pResourceData = new uint8_t[dataSize];
 
-        // Write PGM header
-        pgmFile << "P5" << std::endl;
-        pgmFile << width << " " << height << std::endl;
-        pgmFile << "255" << std::endl;
+    // Transfer the data to the staging buffer
+    memcpy(pResourceData, data, dataSize);
 
-        // Convert RGBA data to grayscale and write to file
-        unsigned char* rgbaData      = reinterpret_cast<unsigned char*>(pCPUData);
-        unsigned char* grayscaleData = new unsigned char[width * height];
-        for (int i = 0; i < width * height; ++i)
-        {
-            // Average RGB components to obtain grayscale
-            grayscaleData[i] = (rgbaData[i * 4] + rgbaData[i * 4 + 1] + rgbaData[i * 4 + 2]) / 3;
-        }
+    // Transfer the resources to the GPU
+    const GPUResource* pResources[] = {m_pColorTarget->GetResource(),
+                                       m_pDepthTarget->GetResource(),
+                                       m_pMotionVectors->GetResource(),
+                                       m_pReactiveMask->GetResource(),
+                                       m_pCompositionMask->GetResource()};
 
-        // Write grayscale data to file
-        pgmFile.write(reinterpret_cast<char*>(grayscaleData), width * height);
+    m_DX12Ops.TransferResourcesToGPU(pResources, _countof(pResources), pCmdList);
 
-        // Clean up
-        delete[] grayscaleData;
+    // FidelityFX contexts modify the set resource view heaps, so set the cauldron one back
+    SetAllResourceViewHeaps(pCmdList);
+}
 
-        // Close file
-        pgmFile.close();
+void FSRRemoteRenderModule::OutboundDataTransfer(double deltaTime, CommandList* pCmdList)
+{
+    const GPUResource* pResources[] = {m_pColorTarget->GetResource(),
+                                       m_pDepthTarget->GetResource(),
+                                       m_pMotionVectors->GetResource(),
+                                       m_pReactiveMask->GetResource(),
+                                       m_pCompositionMask->GetResource()};
 
-        // Set done flag
-        done = true;
+    // Transfer the resources to the CPU
+    m_DX12Ops.TransferResourcesToCPU(pResources, _countof(pResources));
+    uint8_t* pResourceData = m_DX12Ops.GetStagingData();
 
-        // Free the data
-        free(const_cast<void*>(pCPUData));
-
-        Log::Write(LOGLEVEL_INFO, L"Written example file...");
-    }
+    // Write the data to a file
+    FILE* pFile = fopen("dump.bin", "wb");
+    fwrite(pResourceData, 1, m_DX12Ops.CalculateTotalSize(pResources, _countof(pResources)), pFile);
+    fclose(pFile);
 
     // FidelityFX contexts modify the set resource view heaps, so set the cauldron one back
     SetAllResourceViewHeaps(pCmdList);

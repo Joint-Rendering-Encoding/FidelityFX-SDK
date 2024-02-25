@@ -90,6 +90,7 @@ namespace cauldron
             // 8-bit
         case ResourceFormat::R8_SINT:
         case ResourceFormat::R8_UINT:
+        case ResourceFormat::R8_UNORM:
             return 1;
 
             // 16-bit
@@ -111,6 +112,7 @@ namespace cauldron
         case ResourceFormat::RGBA8_SNORM:
         case ResourceFormat::RGBA8_SRGB:
         case ResourceFormat::RGB10A2_UNORM:
+        case ResourceFormat::RG11B10_FLOAT:
         case ResourceFormat::RG16_SINT:
         case ResourceFormat::RG16_UINT:
         case ResourceFormat::RG16_FLOAT:

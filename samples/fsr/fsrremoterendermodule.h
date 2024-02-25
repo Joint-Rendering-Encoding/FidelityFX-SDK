@@ -4,6 +4,8 @@
 #include "core/framework.h"
 #include "core/uimanager.h"
 
+#include "utils/dx12ops.h"
+
 #include <functional>
 
 namespace cauldron
@@ -40,11 +42,6 @@ public:
     void Init(const json& initData) override;
 
     /**
-     * @brief   If render module is enabled, initialize the FSR Remote API Context. If disabled, destroy the FSR Remote API Context.
-     */
-    void EnableModule(bool enabled) override;
-
-    /**
      * @brief   Setup parameters that the FSR Remote API needs this frame and then send the resources to the relay server.
      */
     void Execute(double deltaTime, cauldron::CommandList* pCmdList) override;
@@ -56,6 +53,20 @@ public:
 
 private:
 
+    // FSR Remote variables
+    bool m_RelayMode = false;
+    
+    // DX12Ops
+    DX12Ops m_DX12Ops;
+
+    // FSR Remote CPU-GPU Highway 101
+    void OutboundDataTransfer(double deltaTime, cauldron::CommandList* pCmdList);
+    void InboundDataTransfer(double deltaTime, cauldron::CommandList* pCmdList);
+
     // FidelityFX Super Resolution resources
-    const cauldron::Texture* m_pColorTarget = nullptr;
+    const cauldron::Texture* m_pColorTarget     = nullptr;
+    const cauldron::Texture* m_pDepthTarget     = nullptr;
+    const cauldron::Texture* m_pMotionVectors   = nullptr;
+    const cauldron::Texture* m_pReactiveMask    = nullptr;
+    const cauldron::Texture* m_pCompositionMask = nullptr;
 };

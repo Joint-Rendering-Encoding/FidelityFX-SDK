@@ -101,6 +101,9 @@ void ToneMappingRenderModule::Init(const json& InitData)
     UISection uiSection;
     uiSection.SectionName = "Post Processing";
 
+    // Set the default tonemapper
+    m_ConstantData.ToneMapper = InitData.value("ToneMapper", 0); // Default to AMD Tonemapper
+
     const char* tonemappers[] = { "AMD Tonemapper", "DX11DSK", "Reinhard", "Uncharted2Tonemap", "ACES", "No Tonemapper" };
     std::vector<std::string> comboOptions;
     comboOptions.assign(tonemappers, tonemappers + _countof(tonemappers));

@@ -50,6 +50,23 @@ void FSRSample::ParseSampleConfig()
     // Get the sample configuration
     json configData = sampleConfig["FidelityFX FSR"];
 
+    // Parse remote related config
+    json remoteConfig = configData["Remote"];
+
+    // Parse the remote config
+    m_RemoteMode = remoteConfig["Mode"].get<std::string>() == "Renderer" ? RemoteMode::Renderer : RemoteMode::Relay;
+
+    // Get the correct render modules
+    configData["RenderModules"] = m_RemoteMode == RemoteMode::Renderer ? remoteConfig["RenderModules"]["Renderer"] : remoteConfig["RenderModules"]["Relay"];
+
+    // Get the correct render module overrides
+    configData["RenderModuleOverrides"] =
+        m_RemoteMode == RemoteMode::Renderer ? remoteConfig["RenderModuleOverrides"]["Renderer"] : remoteConfig["RenderModuleOverrides"]["Relay"];
+
+    // Remove content if we are in relay mode
+    if (m_RemoteMode == RemoteMode::Relay)
+        configData.erase("Content");
+
     // Let the framework parse all the "known" options for us
     ParseConfigData(configData);
 }
@@ -62,26 +79,47 @@ void FSRSample::ParseSampleCmdLine(const wchar_t* cmdLine)
 // Register sample's render modules so the factory can spawn them
 void FSRSample::RegisterSampleModules()
 {
-    // Init all pre-registered render modules
-    rendermodule::RegisterAvailableRenderModules();
-
-    // Register sample render modules
+    // Register the remote render module
     RenderModuleFactory::RegisterModule<FSRRemoteRenderModule>("FSRRemoteRenderModule");
-    RenderModuleFactory::RegisterModule<FSR3RenderModule>("FSR3RenderModule");
-    RenderModuleFactory::RegisterModule<FSR3UpscaleRenderModule>("FSR3UpscaleRenderModule");
-    RenderModuleFactory::RegisterModule<FSR2RenderModule>("FSR2RenderModule");
-    RenderModuleFactory::RegisterModule<FSR1RenderModule>("FSR1RenderModule");
-    RenderModuleFactory::RegisterModule<UpscaleRenderModule>("UpscaleRenderModule");
+
+    // Common render modules
+    rendermodule::RegisterCommonRenderModules();
+    
+    // Register rest of the render modules
+    if (m_RemoteMode == RemoteMode::Renderer)
+    {
+        // Init all pre-registered render modules
+        rendermodule::RegisterAvailableRenderModules();
+    }
+    else
+    {
+        // Register the upscaler render modules
+        RenderModuleFactory::RegisterModule<FSR3RenderModule>("FSR3RenderModule");
+        RenderModuleFactory::RegisterModule<FSR3UpscaleRenderModule>("FSR3UpscaleRenderModule");
+        RenderModuleFactory::RegisterModule<FSR2RenderModule>("FSR2RenderModule");
+        RenderModuleFactory::RegisterModule<FSR1RenderModule>("FSR1RenderModule");
+        RenderModuleFactory::RegisterModule<UpscaleRenderModule>("UpscaleRenderModule");
+
+        // Register required render modules for upscaling
+        RenderModuleFactory::RegisterModule<TAARenderModule>("TAARenderModule");
+    }
 }
 
 // Sample initialization point
 int32_t FSRSample::DoSampleInit()
 {
+    // Initialize the remote render module
+    m_pFSRRemoteRenderModule = static_cast<FSRRemoteRenderModule*>(GetFramework()->GetRenderModule("FSRRemoteRenderModule"));
+    CauldronAssert(ASSERT_CRITICAL, m_pFSRRemoteRenderModule, L"FidelityFX FSR Sample: Error: Could not find FSRRemote render module.");
+
+    // Rest is only needed if we are in Relay mode
+    if (m_RemoteMode != RemoteMode::Relay)
+        return 0;
+
     // Store pointers to various render modules
     m_pFSR2RenderModule = static_cast<FSR2RenderModule*>(GetFramework()->GetRenderModule("FSR2RenderModule"));
     m_pFSR3UpscaleRenderModule = static_cast<FSR3UpscaleRenderModule*>(GetFramework()->GetRenderModule("FSR3UpscaleRenderModule"));
     m_pFSR3RenderModule = static_cast<FSR3RenderModule*>(GetFramework()->GetRenderModule("FSR3RenderModule"));
-    m_pFSRRemoteRenderModule = static_cast<FSRRemoteRenderModule*>(GetFramework()->GetRenderModule("FSRRemoteRenderModule"));
 
     m_pFSR1RenderModule = static_cast<FSR1RenderModule*>(GetFramework()->GetRenderModule("FSR1RenderModule"));
     m_pUpscaleRenderModule = static_cast<UpscaleRenderModule*>(GetFramework()->GetRenderModule("UpscaleRenderModule"));
@@ -92,7 +130,6 @@ int32_t FSRSample::DoSampleInit()
 
     CauldronAssert(ASSERT_CRITICAL, m_pFSR3RenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR3 render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pFSR3UpscaleRenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR3Upscale render module.");
-    CauldronAssert(ASSERT_CRITICAL, m_pFSRRemoteRenderModule, L"FidelityFX FSR Sample: Error: Could not find FSRRemote render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pFSR2RenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR2 render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pFSR1RenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR1 render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pUpscaleRenderModule, L"FidelityFX FSR Sample: Error: Could not find upscale render module.");
@@ -125,7 +162,7 @@ int32_t FSRSample::DoSampleInit()
 
 #ifdef FFX_API_DX12
     // Setup upscale method options
-    const char* upscalers[] = { "Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2", "FSR3Upscale", "FSR3", "FSRRemote" };
+    const char* upscalers[] = { "Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2", "FSR3Upscale", "FSR3" };
     std::vector<std::string> comboOptions;
     comboOptions.assign(upscalers, upscalers + _countof(upscalers));
 
@@ -134,7 +171,7 @@ int32_t FSRSample::DoSampleInit()
     GetUIManager()->RegisterUIElements(uiSection);
 
     // Setup FSR3 as the default upscaler
-    m_UIMethod = UpscaleMethod::FSRRemote;
+    m_UIMethod = UpscaleMethod::Native;
 #else
     // Setup upscale method options
     const char*              upscalers[] = {"Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2"};
@@ -197,9 +234,6 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
         m_pCurrentUpscaler = m_pFSR3RenderModule;
         m_pFSR3RenderModule->m_NeedReInit = false;
         break;
-    case UpscaleMethod::FSRRemote:
-        m_pCurrentUpscaler = m_pFSRRemoteRenderModule;
-        break;
     default:
         CauldronCritical(L"Unsupported upscaler requested.");
         break;
@@ -212,6 +246,10 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
 
 void FSRSample::DoSampleUpdates(double deltaTime)
 {
+    // Only needed if we are in Relay mode
+    if (m_RemoteMode != RemoteMode::Relay)
+        return;
+
     // Upscaler changes need to be done before the rest of the frame starts executing
     // as it relies on the upscale method being set for the frame and whatnot
     if (m_UIMethod != m_Method || m_pFSR3RenderModule->m_NeedReInit)
@@ -219,11 +257,14 @@ void FSRSample::DoSampleUpdates(double deltaTime)
         m_Method = m_UIMethod;
         SwitchUpscaler(m_UIMethod);
     }
-
 }
 
 void FSRSample::DoSampleShutdown()
 {
+    // Only needed if we are in Relay mode
+    if (m_RemoteMode != RemoteMode::Relay)
+        return;
+
     if (m_pCurrentUpscaler)
         m_pCurrentUpscaler->EnableModule(false);
 }

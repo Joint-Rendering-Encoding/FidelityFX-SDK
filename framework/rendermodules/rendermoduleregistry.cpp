@@ -43,13 +43,16 @@ namespace rendermodule
     void RegisterAvailableRenderModules()
     {
         RenderModuleFactory::RegisterModule<SkyDomeRenderModule>("SkyDomeRenderModule");
-        RenderModuleFactory::RegisterModule<GBufferRenderModule>("GBufferRenderModule");
         RenderModuleFactory::RegisterModule<GPUParticleRenderModule>("GPUParticleRenderModule");
         RenderModuleFactory::RegisterModule<LightingRenderModule>("LightingRenderModule");
         RenderModuleFactory::RegisterModule<RasterShadowRenderModule>("RasterShadowRenderModule");
-        RenderModuleFactory::RegisterModule<TAARenderModule>("TAARenderModule");
-        RenderModuleFactory::RegisterModule<TranslucencyRenderModule>("TranslucencyRenderModule");
         RenderModuleFactory::RegisterModule<AnimatedTexturesRenderModule>("AnimatedTexturesRenderModule");
+    }
+
+    void RegisterCommonRenderModules()
+    {
+        RenderModuleFactory::RegisterModule<GBufferRenderModule>("GBufferRenderModule");
+        RenderModuleFactory::RegisterModule<TranslucencyRenderModule>("TranslucencyRenderModule");
     }
 
 } // namespace rendermodule

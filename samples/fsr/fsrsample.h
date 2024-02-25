@@ -81,12 +81,19 @@ private:
         FSR2,
         FSR3UPSCALEONLY,
         FSR3,
-        FSRRemote,
 
         Count
     };
 
+    enum class RemoteMode : uint32_t
+    {
+        Renderer = 0,
+        Relay
+    };
+
     void SwitchUpscaler(UpscaleMethod newUpscaler);
+
+    RemoteMode m_RemoteMode = RemoteMode::Renderer;
 
     UpscaleMethod m_Method = UpscaleMethod::Native;
     UpscaleMethod m_UIMethod = UpscaleMethod::Native;

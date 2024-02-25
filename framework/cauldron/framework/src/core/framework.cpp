@@ -716,6 +716,15 @@ namespace cauldron
             m_Config.CurrentDisplayMode = presentationConfig.value<DisplayMode>("Mode", m_Config.CurrentDisplayMode);
         }
 
+        // Initialize FPS limiter configuration
+        if (configData.find("FPSLimiter") != configData.end())
+        {
+            json fpsLimiterConfig     = configData["FPSLimiter"];
+            m_Config.LimitFPS         = fpsLimiterConfig.value("Enable", m_Config.LimitFPS);
+            m_Config.GPULimitFPS      = fpsLimiterConfig.value("UseGPULimiter", m_Config.GPULimitFPS);
+            m_Config.LimitedFrameRate = fpsLimiterConfig.value("TargetFPS", m_Config.LimitedFrameRate);
+        }
+
         // Initialize allocation configuration
         if (configData.find("Allocations") != configData.end())
         {
@@ -1487,8 +1496,6 @@ namespace cauldron
                 compMgrIter->second->UpdateComponents(m_DeltaTime);
         }
 
-        std::vector<std::wstring> renderModuleNames(30);
-
         // If the scene is not yet ready, skip to end frame
         if (m_pScene->IsReady())
         {
@@ -1506,15 +1513,6 @@ namespace cauldron
                 CPUScopedProfileCapture marker(L"RM Executes");
                 for (auto& callback : m_ExecutionCallbacks)
                 {
-                    // skip if it doesnt contain "remote"
-                    std::wstring name = callback.first;
-                    if (name.find(L"Remote") == std::string::npos && name.find(L"Swap") == std::string::npos && name.find(L"UI") == std::string::npos)
-                    {
-                        continue;
-                    }
-
-                    renderModuleNames.push_back(name);
-
                     if (callback.second.first->ModuleEnabled() && callback.second.first->ModuleReady())
                     {
                         m_pCmdListForFrame = m_pDevice->CreateCommandList(L"RenderModuleGraphicsCmdList", CommandQueue::Graphics);

@@ -74,7 +74,7 @@ void FSR3UpscaleRenderModule::Init(const json& initData)
         this->PreTransCallback(deltaTime, pCmdList);
     };
     ExecutionTuple callbackPreTransTuple = std::make_pair(L"FSR3UpscaleRenderModule::PreTransCallback", std::make_pair(this, callbackPreTrans));
-    GetFramework()->RegisterExecutionCallback(L"LightingRenderModule", false, callbackPreTransTuple);
+    GetFramework()->RegisterExecutionCallback(L"TranslucencyRenderModule", true, callbackPreTransTuple);
 
     // Register a post-transparency callback to generate reactive mask
     ExecuteCallback callbackPostTrans = [this](double deltaTime, CommandList* pCmdList) {

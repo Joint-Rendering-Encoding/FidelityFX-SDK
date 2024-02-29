@@ -152,7 +152,7 @@ int32_t FSRSample::DoSampleInit()
 
     // Set all other UI sections to collapse by default
     for (auto& section : GetUIManager()->GetGeneralLayout())
-        if (section.SectionName != "FPS Limiter")
+        if (section.SectionName != "FPS Limiter" && section.SectionName != "FSR Remote")
             section.defaultOpen = false;
 
     // Register upscale method picker picker

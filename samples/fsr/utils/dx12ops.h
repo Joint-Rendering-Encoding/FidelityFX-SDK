@@ -1,14 +1,24 @@
 #pragma once
 
 #include "validation_remap.h"
+#include "../common.h"
 
 using namespace cauldron;
+using namespace common;
 
 class DX12Ops
 {
 public:
     DX12Ops() = default;
-    ~DX12Ops();
+
+    ~DX12Ops()
+    {
+        if (p_StagingResource)
+        {
+            p_StagingResource->Release();
+            p_StagingResource = nullptr;
+        }
+    }
 
     // WriteSource is used to specify the source of the data to be written to the resource.
     enum class WriteSource : uint32_t
@@ -17,17 +27,14 @@ public:
         GPU,
     };
 
-    size_t CalculateTotalSize(const GPUResource** pResources, size_t numResources);
+    size_t CalculateTotalSize(FSRResources pResources);
 
     void CreateStagingResource(WriteSource source, size_t size);
 
-    void TransferResourcesToCPU(const GPUResource** pResources, size_t numResources);
+    void TransferResourcesToCPU(FSRResources pResources, const FSRData* pDst);
 
-    void TransferResourcesToGPU(const GPUResource** pResources, size_t numResources, CommandList* pCmdList);
-
-    uint8_t* GetStagingData() const { return p_StagingData; }
+    void TransferResourcesToGPU(FSRResources pResources, FSRData* const pSrc, CommandList* pCmdList);
 
 private:
     ID3D12Resource* p_StagingResource = nullptr;
-    uint8_t* p_StagingData = nullptr;
 };

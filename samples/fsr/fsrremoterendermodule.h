@@ -5,8 +5,12 @@
 #include "core/uimanager.h"
 
 #include "utils/dx12ops.h"
+#include "utils/connops.h"
+#include "common.h"
 
 #include <functional>
+
+using namespace common;
 
 namespace cauldron
 {
@@ -23,6 +27,8 @@ namespace cauldron
 class FSRRemoteRenderModule : public cauldron::RenderModule
 {
 public:
+    bool m_Connected = false;
+
     /**
      * @brief   Constructor with default behavior.
      */
@@ -52,12 +58,16 @@ public:
     void OnResize(const cauldron::ResolutionInfo& resInfo) override;
 
 private:
+    // For UI params
+    cauldron::UISection m_UISection;
 
     // FSR Remote variables
-    bool m_RelayMode = false;
-    
+    bool                        m_RelayMode = false;
+    std::unique_ptr<Connection> m_Connection;
+    bool                        m_WarningSent = false;
+
     // DX12Ops
-    DX12Ops m_DX12Ops;
+    std::unique_ptr<DX12Ops> m_DX12Ops;
 
     // FSR Remote CPU-GPU Highway 101
     void OutboundDataTransfer(double deltaTime, cauldron::CommandList* pCmdList);
@@ -69,4 +79,13 @@ private:
     const cauldron::Texture* m_pMotionVectors   = nullptr;
     const cauldron::Texture* m_pReactiveMask    = nullptr;
     const cauldron::Texture* m_pCompositionMask = nullptr;
+
+    FSRResources getFSRResources() const
+    {
+        return {m_pColorTarget->GetResource(),
+                m_pDepthTarget->GetResource(),
+                m_pMotionVectors->GetResource(),
+                m_pReactiveMask->GetResource(),
+                m_pCompositionMask->GetResource()};
+    }
 };

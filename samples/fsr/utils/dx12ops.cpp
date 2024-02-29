@@ -1,24 +1,14 @@
 #include "dx12ops.h"
-#include <chrono>
 
-DX12Ops::~DX12Ops()
-{
-    if (p_StagingResource)
-    {
-        p_StagingResource->Release();
-        p_StagingResource = nullptr;
-    }
-}
-
-size_t DX12Ops::CalculateTotalSize(const GPUResource** pResources, size_t numResources)
+size_t DX12Ops::CalculateTotalSize(FSRResources pResources)
 {
     size_t totalSize = 0;
 
-    for (size_t i = 0; i < numResources; i++)
+    for (size_t i = 0; i < pResources.size(); i++)
     {
-        const GPUResource* pResource = pResources[i];
-        D3D12_RESOURCE_DESC desc = pResource->GetImpl()->DX12Desc();
-        ResourceFormat format = pResource->GetTextureResource()->GetFormat();
+        const GPUResource*  pResource = pResources[i];
+        D3D12_RESOURCE_DESC desc      = pResource->GetImpl()->DX12Desc();
+        ResourceFormat      format    = pResource->GetTextureResource()->GetFormat();
 
         totalSize += desc.Width * desc.Height * GetResourceFormatStride(format);
     }
@@ -63,15 +53,12 @@ void DX12Ops::CreateStagingResource(WriteSource source, size_t size)
     D3D12_RESOURCE_STATES state = source == WriteSource::GPU ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_GENERIC_READ;
     HRESULT hr = pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc, state, nullptr, IID_PPV_ARGS(&p_StagingResource));
     CauldronThrowOnFail(hr);
-
-    // Create the corresponding CPU data location
-    p_StagingData = (uint8_t*) malloc(size * sizeof(uint8_t));
 }
 
-void DX12Ops::TransferResourcesToCPU(const GPUResource** pResources, size_t numResources)
+void DX12Ops::TransferResourcesToCPU(FSRResources pResources, const FSRData* pDst)
 {
     // Create a staging resource
-    size_t totalSize = CalculateTotalSize(pResources, numResources);
+    size_t totalSize = CalculateTotalSize(pResources);
     CreateStagingResource(WriteSource::GPU, totalSize);
 
     // Create a command list to be used for the copy operation
@@ -81,7 +68,7 @@ void DX12Ops::TransferResourcesToCPU(const GPUResource** pResources, size_t numR
     // Keep track of the current offset in the staging resource
     size_t offset = 0;
 
-    for (size_t i = 0; i < numResources; i++)
+    for (size_t i = 0; i < pResources.size(); i++)
     {
         GPUResource*        pResource = const_cast<GPUResource*>(pResources[i]);
         D3D12_RESOURCE_DESC desc      = pResource->GetImpl()->DX12Desc();
@@ -152,15 +139,15 @@ void DX12Ops::TransferResourcesToCPU(const GPUResource** pResources, size_t numR
     CloseHandle(mHandleFenceEvent);
     pFence->Release();
 
-    uint8_t*    pData     = NULL;
+    uint8_t*    pData = NULL;
     D3D12_RANGE range{0, totalSize};
-    HRESULT hr  = p_StagingResource->Map(0, &range, reinterpret_cast<void**>(&pData));
+    HRESULT     hr = p_StagingResource->Map(0, &range, reinterpret_cast<void**>(&pData));
 
     // Copy the data to the destination pointer
     if (SUCCEEDED(hr))
     {
         // Copy memory to destination
-        memcpy(p_StagingData, pData, totalSize);
+        memcpy(pDst->get(), pData, totalSize);
         p_StagingResource->Unmap(0, NULL);
     }
     else
@@ -168,28 +155,27 @@ void DX12Ops::TransferResourcesToCPU(const GPUResource** pResources, size_t numR
         // Handle error
         p_StagingResource->Release();
         CauldronThrowOnFail(hr);
-        return;
     }
 
     // Delete the command list
     delete pCmdList;
 }
 
-void DX12Ops::TransferResourcesToGPU(const GPUResource** pResources, size_t numResources, CommandList* pCmdList)
+void DX12Ops::TransferResourcesToGPU(FSRResources pResources, FSRData* const pSrc, CommandList* pCmdList)
 {
     // Create a staging resource
-    size_t totalSize = CalculateTotalSize(pResources, numResources);
+    size_t totalSize = CalculateTotalSize(pResources);
     CreateStagingResource(WriteSource::CPU, totalSize);
 
     // Map the staging resource
-    uint8_t* pData;
-    HRESULT  hr = p_StagingResource->Map(0, NULL, reinterpret_cast<void**>(&pData));
+    uint8_t* pData = NULL;
+    HRESULT  hr    = p_StagingResource->Map(0, NULL, reinterpret_cast<void**>(&pData));
 
     // Copy the data to the staging resource
     if (SUCCEEDED(hr))
     {
         // Copy memory to destination
-        memcpy(pData, p_StagingData, totalSize);
+        memcpy(pData, pSrc->get(), totalSize);
         p_StagingResource->Unmap(0, NULL);
     }
     else
@@ -203,7 +189,7 @@ void DX12Ops::TransferResourcesToGPU(const GPUResource** pResources, size_t numR
     // Keep track of the current offset in the staging resource
     size_t offset = 0;
 
-    for (size_t i = 0; i < numResources; i++)
+    for (size_t i = 0; i < pResources.size(); i++)
     {
         GPUResource*        pResource = const_cast<GPUResource*>(pResources[i]);
         D3D12_RESOURCE_DESC desc      = pResource->GetImpl()->DX12Desc();

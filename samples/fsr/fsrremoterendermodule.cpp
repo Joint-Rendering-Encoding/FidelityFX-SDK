@@ -42,10 +42,33 @@ void FSRRemoteRenderModule::Init(const json& initData)
     }
 
     // Create DX12Ops
-    m_DX12Ops = DX12Ops();
+    m_DX12Ops = std::make_unique<DX12Ops>();
 
-    // Module is always enabled
-    SetModuleEnabled(true);
+    // Open the connection
+    m_Connection = std::make_unique<Connection>(initData.value("Address", "127.0.0.1"), initData.value("Port", "12000"));
+
+    // Intialize the internal connection buffer
+    size_t newSize = m_DX12Ops->CalculateTotalSize(getFSRResources());
+    m_Connection->getQueue().reset(newSize);
+
+    // Start the server, if we are in renderer mode
+    if (!m_RelayMode)
+        m_Connection->run_server();
+
+    // Set up the UI sections
+    if (m_RelayMode)
+    {
+        m_UISection.SectionName = "FSR Remote";
+        m_UISection.AddCheckBox("Connect to renderer", &m_Connected, [this](void*) {
+            if (m_Connected)
+                m_Connection->run_client();
+
+            this->m_Connected = true;
+        });
+    }
+
+    // Register the UI section
+    GetUIManager()->RegisterUIElements(m_UISection);
 
     // That's all we need for now
     SetModuleReady(true);
@@ -62,6 +85,10 @@ void FSRRemoteRenderModule::OnResize(const ResolutionInfo& resInfo)
 {
     if (!ModuleEnabled())
         return;
+
+    // Resize the internal connection buffer
+    size_t newSize = m_DX12Ops->CalculateTotalSize(getFSRResources());
+    m_Connection->getQueue().reset(newSize);
 }
 
 void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
@@ -73,38 +100,21 @@ void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
 void FSRRemoteRenderModule::InboundDataTransfer(double deltaTime, CommandList* pCmdList)
 {
-    static uint8_t* data;
-    static size_t   dataSize;
+    // Enter read lock
+    std::lock_guard<std::mutex> lock(m_Connection.get()->getQueue().getReadLock());
 
-    // Read the data from a file
-    if (data == nullptr)
-    {
-        FILE* pFile = fopen("dump.bin", "rb");
-        fseek(pFile, 0, SEEK_END);
-        dataSize = ftell(pFile);
-        fseek(pFile, 0, SEEK_SET);
+    // Get the next ready buffer
+    FSRData* buffer = m_Connection->getQueue().getNextReadyBuffer();
 
-        data = new uint8_t[dataSize];
-        fread(data, 1, dataSize, pFile);
-        fclose(pFile);
-    }
-
-    // Allocate the staging buffer if it doesn't exist
-    uint8_t* pResourceData = m_DX12Ops.GetStagingData();
-    if (pResourceData == nullptr)
-        pResourceData = new uint8_t[dataSize];
-
-    // Transfer the data to the staging buffer
-    memcpy(pResourceData, data, dataSize);
+    // If we didn't get a buffer, there is no data to process
+    if (!buffer)
+        return;
 
     // Transfer the resources to the GPU
-    const GPUResource* pResources[] = {m_pColorTarget->GetResource(),
-                                       m_pDepthTarget->GetResource(),
-                                       m_pMotionVectors->GetResource(),
-                                       m_pReactiveMask->GetResource(),
-                                       m_pCompositionMask->GetResource()};
+    m_DX12Ops->TransferResourcesToGPU(getFSRResources(), buffer, pCmdList);
 
-    m_DX12Ops.TransferResourcesToGPU(pResources, _countof(pResources), pCmdList);
+    // Release the buffer
+    m_Connection->getQueue().releaseBuffer(buffer);
 
     // FidelityFX contexts modify the set resource view heaps, so set the cauldron one back
     SetAllResourceViewHeaps(pCmdList);
@@ -112,20 +122,41 @@ void FSRRemoteRenderModule::InboundDataTransfer(double deltaTime, CommandList* p
 
 void FSRRemoteRenderModule::OutboundDataTransfer(double deltaTime, CommandList* pCmdList)
 {
-    const GPUResource* pResources[] = {m_pColorTarget->GetResource(),
-                                       m_pDepthTarget->GetResource(),
-                                       m_pMotionVectors->GetResource(),
-                                       m_pReactiveMask->GetResource(),
-                                       m_pCompositionMask->GetResource()};
+    // Enter write lock
+    std::lock_guard<std::mutex> lock(m_Connection->getQueue().getWriteLock());
+
+    // Get the total size of the resources
+    size_t size = m_DX12Ops->CalculateTotalSize(getFSRResources());
+
+    // Check if the buffer size is equal to the requested size
+    if (size != m_Connection->getQueue().getBufferSize())
+    {
+        // Relay probably reconfigured the buffer size, so we need wait until the next frame
+        return;
+    }
+
+    // Try to get a buffer
+    FSRData* buffer = m_Connection->getQueue().getNextEmptyBuffer(size);
+
+    // If we didn't get a buffer, it means that the current write index is not empty
+    if (!buffer)
+    {
+        if (!m_WarningSent)
+        {
+            CauldronWarning(L"FSRRemoteRenderModule::OutboundDataTransfer: No empty buffer available");
+            m_WarningSent = true;
+        }
+        return;
+    }
 
     // Transfer the resources to the CPU
-    m_DX12Ops.TransferResourcesToCPU(pResources, _countof(pResources));
-    uint8_t* pResourceData = m_DX12Ops.GetStagingData();
+    m_DX12Ops->TransferResourcesToCPU(getFSRResources(), buffer);
 
-    // Write the data to a file
-    FILE* pFile = fopen("dump.bin", "wb");
-    fwrite(pResourceData, 1, m_DX12Ops.CalculateTotalSize(pResources, _countof(pResources)), pFile);
-    fclose(pFile);
+    // Mark the buffer as ready
+    m_Connection->getQueue().markBufferReady(buffer);
+
+    // Reset the warning
+    m_WarningSent = false;
 
     // FidelityFX contexts modify the set resource view heaps, so set the cauldron one back
     SetAllResourceViewHeaps(pCmdList);

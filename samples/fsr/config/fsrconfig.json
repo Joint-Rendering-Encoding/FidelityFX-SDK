@@ -41,6 +41,10 @@
 
         "Remote": {
             "Mode": "Renderer",
+            "Connection": {
+                "Address": "127.0.0.1",
+                "Port": "12000"
+            },
             "RenderModules": {
                 "Renderer": [
                     "SkyDomeRenderModule",

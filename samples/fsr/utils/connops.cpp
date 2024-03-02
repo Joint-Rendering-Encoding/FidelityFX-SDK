@@ -15,11 +15,10 @@ void Connection::HandleRelay(SOCKET socket)
         {
         case MessageType::Reconfigure:
         {
-            // TODO: Reconfigure the render resolution
-            uint32_t width  = 0;
-            uint32_t height = 0;
-            recv(socket, (char*)&width, sizeof(width), 0);
-            recv(socket, (char*)&height, sizeof(height), 0);
+            // Put the renderer in reconfigure mode
+            recv(socket, (char*)&mResInfo.RenderWidth, sizeof(uint32_t), 0);
+            recv(socket, (char*)&mResInfo.RenderHeight, sizeof(uint32_t), 0);
+            mReconfigure = true;
 
             // Inform the relay that the renderer is ready to proceed
             type = MessageType::Ack;
@@ -84,15 +83,11 @@ void Connection::HandleRenderer(SOCKET socket)
 {
     int bytesReceived;
 
-    // Initiate the message chain
-    // TODO: Properly send the reconfigure message
-    MessageType type   = MessageType::Reconfigure;
-    uint32_t    width  = 1920;
-    uint32_t    height = 1080;
-
+    // Initiate the message chain by sending a reconfigure message
+    MessageType type = MessageType::Reconfigure;
     send(socket, (char*)&type, sizeof(type), 0);
-    send(socket, (char*)&width, sizeof(width), 0);
-    send(socket, (char*)&height, sizeof(height), 0);
+    send(socket, (char*)&mResInfo.RenderWidth, sizeof(uint32_t), 0);
+    send(socket, (char*)&mResInfo.RenderHeight, sizeof(uint32_t), 0);
 
     do
     {
@@ -105,7 +100,6 @@ void Connection::HandleRenderer(SOCKET socket)
         case MessageType::Ack:
         case MessageType::NotReady:
             // Renderer is acknowledging the last message or is not ready to send data
-            // Do nothing
             break;
         case MessageType::Data:
             // Renderer is actively sending data
@@ -146,9 +140,21 @@ void Connection::HandleRenderer(SOCKET socket)
             break;
         }
 
-        // Request more data
-        type = MessageType::Continue;
-        send(socket, (char*)&type, sizeof(type), 0);
+        // This is the perfect time to notify renderer if reconfiguration is needed
+        if (mReconfigure)
+        {
+            type = MessageType::Reconfigure;
+            send(socket, (char*)&type, sizeof(type), 0);
+            send(socket, (char*)&mResInfo.RenderWidth, sizeof(uint32_t), 0);
+            send(socket, (char*)&mResInfo.RenderHeight, sizeof(uint32_t), 0);
+            mReconfigure = false;
+        }
+        else
+        {
+            // Request more data
+            type = MessageType::Continue;
+            send(socket, (char*)&type, sizeof(type), 0);
+        }
     } while (bytesReceived > 0);
 
     closesocket(socket);

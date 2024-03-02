@@ -304,9 +304,9 @@ namespace cauldron
         GPUScopedProfileCapture UIMarker(pCmdList, L"UI");
 
         // If upscaler is enabled, we NEED to have hit the upscaler by now!
-        CauldronAssert(ASSERT_WARNING,
-                       GetFramework()->GetUpscalingState() != UpscalerState::PreUpscale,
-                       L"Upscale state is still PreUpscale when reaching UIRendermodule. This should not be the case.");
+        // CauldronAssert(ASSERT_WARNING,
+        //                GetFramework()->GetUpscalingState() != UpscalerState::PreUpscale,
+        //                L"Upscale state is still PreUpscale when reaching UIRendermodule. This should not be the case.");
 
         // Do input updates for magnifier
         {

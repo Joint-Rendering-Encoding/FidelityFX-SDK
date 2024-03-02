@@ -83,19 +83,29 @@ FSRRemoteRenderModule::~FSRRemoteRenderModule()
 
 void FSRRemoteRenderModule::OnResize(const ResolutionInfo& resInfo)
 {
-    if (!ModuleEnabled())
+    if (!ModuleEnabled() || resInfo.RenderWidth == m_Connection->getResInfo().RenderWidth)
         return;
 
     // Resize the internal connection buffer
     size_t newSize = m_DX12Ops->CalculateTotalSize(getFSRResources());
     m_Connection->getQueue().reset(newSize);
+
+    // Notify the renderer if we are in relay mode
+    if (m_RelayMode)
+        m_Connection->reconfigure(resInfo);
 }
 
 void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 {
-    // Execute is only meaningful in relay mode, becuase this render module is always first in line
+    // Since this render module is always first in relay mode, we can proceed with the data transfer
     if (m_RelayMode)
-        InboundDataTransfer(deltaTime, pCmdList);
+        return InboundDataTransfer(deltaTime, pCmdList);
+
+    // On renderer mode, if we received a reconfigure message, we need to reconfigure the resolution
+    // So that before swap chain we can get the correct resolution
+    if (m_Connection->shouldReconfigure())
+        GetFramework()->EnableUpscaling(true, [&](uint32_t displayWidth, uint32_t displayHeight) { return m_Connection->getResInfo(); });
+    GetFramework()->SetUpscalingState(UpscalerState::PostUpscale);
 }
 
 void FSRRemoteRenderModule::InboundDataTransfer(double deltaTime, CommandList* pCmdList)

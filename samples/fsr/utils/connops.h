@@ -210,6 +210,23 @@ public:
     void run_server();
     void run_client();
 
+    void reconfigure(const ResolutionInfo& resInfo)
+    {
+        mResInfo     = resInfo;
+        mReconfigure = true;
+    }
+
+    bool shouldReconfigure()
+    {
+        return mReconfigure;
+    }
+
+    ResolutionInfo getResInfo()
+    {
+        mReconfigure = false;
+        return mResInfo;
+    }
+
     BufferRing& getQueue()
     {
         return mQueue;
@@ -221,6 +238,10 @@ private:
     SOCKET      mSocket;
 
     BufferRing mQueue;
+
+    // Reconfigure state
+    ResolutionInfo    mResInfo{2560, 1440, 2560, 1440};
+    std::atomic<bool> mReconfigure = false;
 
     void HandleRelay(SOCKET socket);
     void HandleRenderer(SOCKET socket);

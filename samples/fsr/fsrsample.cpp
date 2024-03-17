@@ -1,7 +1,7 @@
 // This file is part of the FidelityFX SDK.
-// 
+//
 // Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
@@ -10,7 +10,7 @@
 // furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -18,7 +18,6 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-
 
 #include "fsrsample.h"
 #include "fsr2rendermodule.h"
@@ -67,6 +66,11 @@ void FSRSample::ParseSampleConfig()
     if (m_RemoteMode == RemoteMode::Relay)
         configData.erase("Content");
 
+    // Set the startup upscaler method
+    m_UIMethod = remoteConfig["StartupConfiguration"]["Upscaler"].get<UpscaleMethod>();
+    m_UpscalingOnStart = remoteConfig["StartupConfiguration"]["StartOnLoad"];
+    configData["RenderModuleOverrides"]["FSRRemoteRenderModule"]["StartOnLoad"] = m_UpscalingOnStart;
+
     // Let the framework parse all the "known" options for us
     ParseConfigData(configData);
 }
@@ -84,7 +88,7 @@ void FSRSample::RegisterSampleModules()
 
     // Common render modules
     rendermodule::RegisterCommonRenderModules();
-    
+
     // Register rest of the render modules
     if (m_RemoteMode == RemoteMode::Renderer)
     {
@@ -117,14 +121,14 @@ int32_t FSRSample::DoSampleInit()
         return 0;
 
     // Store pointers to various render modules
-    m_pFSR2RenderModule = static_cast<FSR2RenderModule*>(GetFramework()->GetRenderModule("FSR2RenderModule"));
+    m_pFSR2RenderModule        = static_cast<FSR2RenderModule*>(GetFramework()->GetRenderModule("FSR2RenderModule"));
     m_pFSR3UpscaleRenderModule = static_cast<FSR3UpscaleRenderModule*>(GetFramework()->GetRenderModule("FSR3UpscaleRenderModule"));
-    m_pFSR3RenderModule = static_cast<FSR3RenderModule*>(GetFramework()->GetRenderModule("FSR3RenderModule"));
+    m_pFSR3RenderModule        = static_cast<FSR3RenderModule*>(GetFramework()->GetRenderModule("FSR3RenderModule"));
 
-    m_pFSR1RenderModule = static_cast<FSR1RenderModule*>(GetFramework()->GetRenderModule("FSR1RenderModule"));
+    m_pFSR1RenderModule    = static_cast<FSR1RenderModule*>(GetFramework()->GetRenderModule("FSR1RenderModule"));
     m_pUpscaleRenderModule = static_cast<UpscaleRenderModule*>(GetFramework()->GetRenderModule("UpscaleRenderModule"));
-    m_pTAARenderModule = static_cast<TAARenderModule*>(GetFramework()->GetRenderModule("TAARenderModule"));
-    m_pTransRenderModule = static_cast<TranslucencyRenderModule*>(GetFramework()->GetRenderModule("TranslucencyRenderModule"));
+    m_pTAARenderModule     = static_cast<TAARenderModule*>(GetFramework()->GetRenderModule("TAARenderModule"));
+    m_pTransRenderModule   = static_cast<TranslucencyRenderModule*>(GetFramework()->GetRenderModule("TranslucencyRenderModule"));
 
     m_pTAARenderModule->EnableModule(false);
 
@@ -137,15 +141,17 @@ int32_t FSRSample::DoSampleInit()
     CauldronAssert(ASSERT_CRITICAL, m_pTransRenderModule, L"FidelityFX FSR Sample: Error: Could not find Translucency render module.");
 
     // Register additional exports for translucency pass
-    const Texture* pReactiveMask = GetFramework()->GetRenderTexture(L"ReactiveMask");
-    const Texture* pCompositionMask = GetFramework()->GetRenderTexture(L"TransCompMask");
-    BlendDesc reactiveCompositionBlend = { true, Blend::InvDstColor, Blend::One, BlendOp::Add, Blend::One, Blend::Zero, BlendOp::Add, static_cast<uint32_t>(ColorWriteMask::Red) };
+    const Texture* pReactiveMask            = GetFramework()->GetRenderTexture(L"ReactiveMask");
+    const Texture* pCompositionMask         = GetFramework()->GetRenderTexture(L"TransCompMask");
+    BlendDesc      reactiveCompositionBlend = {
+        true, Blend::InvDstColor, Blend::One, BlendOp::Add, Blend::One, Blend::Zero, BlendOp::Add, static_cast<uint32_t>(ColorWriteMask::Red)};
 
     OptionalTransparencyOptions transOptions;
     transOptions.OptionalTargets.push_back(std::make_pair(pReactiveMask, reactiveCompositionBlend));
     transOptions.OptionalTargets.push_back(std::make_pair(pCompositionMask, reactiveCompositionBlend));
     transOptions.OptionalAdditionalOutputs = L"float ReactiveTarget : SV_TARGET1; float CompositionTarget : SV_TARGET2;";
-    transOptions.OptionalAdditionalExports = L"float hasAnimatedTexture = 0.f; output.ReactiveTarget = ReactiveMask; output.CompositionTarget = max(Alpha, hasAnimatedTexture);";
+    transOptions.OptionalAdditionalExports =
+        L"float hasAnimatedTexture = 0.f; output.ReactiveTarget = ReactiveMask; output.CompositionTarget = max(Alpha, hasAnimatedTexture);";
 
     // Add additional exports for FSR to translucency pass
     m_pTransRenderModule->AddOptionalTransparencyOptions(transOptions);
@@ -162,16 +168,13 @@ int32_t FSRSample::DoSampleInit()
 
 #ifdef FFX_API_DX12
     // Setup upscale method options
-    const char* upscalers[] = { "Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2", "FSR3Upscale", "FSR3" };
+    const char*              upscalers[] = {"Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2", "FSR3Upscale", "FSR3"};
     std::vector<std::string> comboOptions;
     comboOptions.assign(upscalers, upscalers + _countof(upscalers));
 
     // Add the section header
     uiSection.AddCombo("Method", reinterpret_cast<int32_t*>(&m_UIMethod), &comboOptions);
     GetUIManager()->RegisterUIElements(uiSection);
-
-    // Setup FSR3 as the default upscaler
-    m_UIMethod = UpscaleMethod::Native;
 #else
     // Setup upscale method options
     const char*              upscalers[] = {"Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2"};
@@ -185,8 +188,8 @@ int32_t FSRSample::DoSampleInit()
     // Setup the default upscaler (FSR2 for now)
     m_UIMethod = UpscaleMethod::FSR2;
 #endif
-    SwitchUpscaler(m_UIMethod);
-    #
+    if (m_UpscalingOnStart)
+        SwitchUpscaler(m_UIMethod);
     return 0;
 }
 
@@ -196,11 +199,11 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
     GetDevice()->FlushAllCommandQueues();
 
     UpscaleMethod oldUpscaler = m_Method;
-    m_Method = newUpscaler;
+    m_Method                  = newUpscaler;
 
     // If we are switching methods, handle it now
     RenderModule* pOldUpscaler = m_pCurrentUpscaler;
-    
+
     // Disable the old upscaler
     if (pOldUpscaler)
         pOldUpscaler->EnableModule(false);
@@ -231,7 +234,7 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
         m_pCurrentUpscaler = m_pFSR3UpscaleRenderModule;
         break;
     case UpscaleMethod::FSR3:
-        m_pCurrentUpscaler = m_pFSR3RenderModule;
+        m_pCurrentUpscaler                = m_pFSR3RenderModule;
         m_pFSR3RenderModule->m_NeedReInit = false;
         break;
     default:

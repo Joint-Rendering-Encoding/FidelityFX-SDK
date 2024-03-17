@@ -1,7 +1,7 @@
 // This file is part of the FidelityFX SDK.
-// 
+//
 // Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
@@ -10,7 +10,7 @@
 // furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -18,7 +18,6 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-
 
 #pragma once
 
@@ -56,7 +55,10 @@ class cauldron::RenderModule;
 class FSRSample : public cauldron::Framework
 {
 public:
-    FSRSample(const cauldron::FrameworkInitParams* pInitParams) : cauldron::Framework(pInitParams) {}
+    FSRSample(const cauldron::FrameworkInitParams* pInitParams)
+        : cauldron::Framework(pInitParams)
+    {
+    }
     virtual ~FSRSample() = default;
 
     // Overrides
@@ -65,12 +67,10 @@ public:
     virtual void RegisterSampleModules() override;
 
     virtual int32_t DoSampleInit() override;
-    virtual void DoSampleUpdates(double deltaTime) override;
-    //virtual void DoSampleResize(const cauldron::ResolutionInfo& resInfo) override  {}
-    virtual void DoSampleShutdown() override;
+    virtual void    DoSampleUpdates(double deltaTime) override;
+    virtual void    DoSampleShutdown() override;
 
 private:
-
     enum class UpscaleMethod : uint32_t
     {
         Native = 0,
@@ -95,20 +95,21 @@ private:
 
     RemoteMode m_RemoteMode = RemoteMode::Renderer;
 
-    UpscaleMethod m_Method = UpscaleMethod::Native;
-    UpscaleMethod m_UIMethod = UpscaleMethod::Native;
+    bool                    m_UpscalingOnStart = false;
+    UpscaleMethod           m_Method           = UpscaleMethod::Native;
+    UpscaleMethod           m_UIMethod         = UpscaleMethod::Native;
     cauldron::RenderModule* m_pCurrentUpscaler = nullptr;
 
-    FSRRemoteRenderModule*    m_pFSRRemoteRenderModule = nullptr;
-    FSR3RenderModule*         m_pFSR3RenderModule = nullptr;
+    FSRRemoteRenderModule*    m_pFSRRemoteRenderModule   = nullptr;
+    FSR3RenderModule*         m_pFSR3RenderModule        = nullptr;
     FSR3UpscaleRenderModule*  m_pFSR3UpscaleRenderModule = nullptr;
-    FSR2RenderModule*         m_pFSR2RenderModule = nullptr;
-    FSR1RenderModule*         m_pFSR1RenderModule = nullptr;
-    UpscaleRenderModule*      m_pUpscaleRenderModule = nullptr;
-    TAARenderModule*          m_pTAARenderModule = nullptr;
-    TranslucencyRenderModule* m_pTransRenderModule = nullptr;
+    FSR2RenderModule*         m_pFSR2RenderModule        = nullptr;
+    FSR1RenderModule*         m_pFSR1RenderModule        = nullptr;
+    UpscaleRenderModule*      m_pUpscaleRenderModule     = nullptr;
+    TAARenderModule*          m_pTAARenderModule         = nullptr;
+    TranslucencyRenderModule* m_pTransRenderModule       = nullptr;
 
-/// @}
+    /// @}
 };
 
 typedef FSRSample FrameworkType;

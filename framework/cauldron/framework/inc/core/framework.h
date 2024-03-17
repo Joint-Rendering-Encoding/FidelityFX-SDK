@@ -635,6 +635,19 @@ namespace cauldron
          */
         void AddContentCreationTask(Task& task) { m_Config.ContentCreationTasks.push_back(task); }
 
+        /**
+         * @brief    Set the function that determines if the next MainLoop function should be called or not
+         */
+        void SetReadyFunction(std::function<bool()> fn)
+        {
+            m_ReadyForNext = fn;
+        }
+
+        bool CanExecuteMainLoop()
+        {
+            return m_ReadyForNext();
+        }
+
     private:
         friend class FrameworkInternal;
         Framework() = delete;
@@ -677,20 +690,21 @@ namespace cauldron
         void DeleteCommandListAsync(void* pInFlightGPUInfo);
 
         // Members
-        CauldronConfig          m_Config = {};
-        std::wstring            m_Name;
-        std::wstring            m_ConfigFileName;
-        std::wstring            m_CmdLine;
-        std::wstring            m_CPUName = L"Not Set";
-        ResolutionInfo          m_ResolutionInfo = { 1920, 1080, 1920, 1080 };
-        ResolutionInfo          m_BenchmarkResolutionInfo = { 1920, 1080, 1920, 1080 };
-        UpscalerState           m_UpscalingState = UpscalerState::None;
-        ResolutionUpdateFunc    m_ResolutionUpdaterFn = nullptr;
-        bool                    m_UpscalerEnabled = false;
-        bool                    m_FrameInterpolationEnabled = false;
-        std::atomic_bool        m_Running = false;
-        FrameCaptureState       m_RenderDocCaptureState = FrameCaptureState::None;
-        FrameCaptureState       m_PixCaptureState       = FrameCaptureState::None;
+        CauldronConfig        m_Config = {};
+        std::wstring          m_Name;
+        std::wstring          m_ConfigFileName;
+        std::wstring          m_CmdLine;
+        std::wstring          m_CPUName                   = L"Not Set";
+        ResolutionInfo        m_ResolutionInfo            = {1920, 1080, 1920, 1080};
+        ResolutionInfo        m_BenchmarkResolutionInfo   = {1920, 1080, 1920, 1080};
+        UpscalerState         m_UpscalingState            = UpscalerState::None;
+        ResolutionUpdateFunc  m_ResolutionUpdaterFn       = nullptr;
+        bool                  m_UpscalerEnabled           = false;
+        bool                  m_FrameInterpolationEnabled = false;
+        std::atomic_bool      m_Running                   = false;
+        FrameCaptureState     m_RenderDocCaptureState     = FrameCaptureState::None;
+        FrameCaptureState     m_PixCaptureState           = FrameCaptureState::None;
+        std::function<bool()> m_ReadyForNext              = []() { return true; };
 
         // Task Manager for background tasks
         TaskManager*            m_pTaskManager = nullptr;

@@ -347,7 +347,10 @@ namespace cauldron
 
                         m_sendResizeEvent = false;
                     }
-                    m_pFramework->MainLoop();
+
+                    // Check if we can execute
+                    if (m_pFramework->CanExecuteMainLoop())
+                        m_pFramework->MainLoop();
                 }
             }
         }

@@ -27,8 +27,6 @@ namespace cauldron
 class FSRRemoteRenderModule : public cauldron::RenderModule
 {
 public:
-    bool m_Connected = false;
-
     /**
      * @brief   Constructor with default behavior.
      */
@@ -56,15 +54,18 @@ public:
      * @brief   Recreate the FSR Remote API Context to resize internal resources. Called by the framework when the resolution changes.
      */
     void OnResize(const cauldron::ResolutionInfo& resInfo) override;
+    
+    // Public variables
+    bool m_Connected = false;
 
 private:
     // For UI params
     cauldron::UISection m_UISection;
 
     // FSR Remote variables
-    bool                        m_RelayMode = false;
+    bool                        m_StartOnLoad = false;
+    bool                        m_RelayMode   = false;
     std::unique_ptr<Connection> m_Connection;
-    bool                        m_WarningSent = false;
 
     // DX12Ops
     std::unique_ptr<DX12Ops> m_DX12Ops;

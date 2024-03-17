@@ -18,6 +18,8 @@ void Connection::HandleRelay(SOCKET socket)
             // Put the renderer in reconfigure mode
             recv(socket, (char*)&mResInfo.RenderWidth, sizeof(uint32_t), 0);
             recv(socket, (char*)&mResInfo.RenderHeight, sizeof(uint32_t), 0);
+            recv(socket, (char*)&mResInfo.DisplayWidth, sizeof(uint32_t), 0);
+            recv(socket, (char*)&mResInfo.DisplayHeight, sizeof(uint32_t), 0);
             mReconfigure = true;
 
             // Inform the relay that the renderer is ready to proceed
@@ -88,6 +90,8 @@ void Connection::HandleRenderer(SOCKET socket)
     send(socket, (char*)&type, sizeof(type), 0);
     send(socket, (char*)&mResInfo.RenderWidth, sizeof(uint32_t), 0);
     send(socket, (char*)&mResInfo.RenderHeight, sizeof(uint32_t), 0);
+    send(socket, (char*)&mResInfo.DisplayWidth, sizeof(uint32_t), 0);
+    send(socket, (char*)&mResInfo.DisplayHeight, sizeof(uint32_t), 0);
 
     do
     {
@@ -147,6 +151,8 @@ void Connection::HandleRenderer(SOCKET socket)
             send(socket, (char*)&type, sizeof(type), 0);
             send(socket, (char*)&mResInfo.RenderWidth, sizeof(uint32_t), 0);
             send(socket, (char*)&mResInfo.RenderHeight, sizeof(uint32_t), 0);
+            send(socket, (char*)&mResInfo.DisplayWidth, sizeof(uint32_t), 0);
+            send(socket, (char*)&mResInfo.DisplayHeight, sizeof(uint32_t), 0);
             mReconfigure = false;
         }
         else

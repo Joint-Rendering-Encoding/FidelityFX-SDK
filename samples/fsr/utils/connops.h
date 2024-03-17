@@ -145,6 +145,17 @@ public:
         }
     }
 
+    bool nextBufferReady()
+    {
+        std::lock_guard<std::mutex> lock(mStateLock);
+
+        // Clamp the index to the buffer size
+        size_t index = mReadIndex % mState.size();
+
+        // Check if the buffer is ready
+        return mState[index] == BufferState::Ready;
+    }
+
     FSRData* getNextReadyBuffer()
     {
         std::lock_guard<std::mutex> lock(mStateLock);
@@ -160,6 +171,17 @@ public:
         }
 
         return nullptr;  // Current read index is not ready
+    }
+
+    bool nextBufferEmpty()
+    {
+        std::lock_guard<std::mutex> lock(mStateLock);
+
+        // Clamp the index to the buffer size
+        size_t index = mWriteIndex % mState.size();
+
+        // Check if the buffer is empty
+        return mState[index] == BufferState::Empty;
     }
 
     FSRData* getNextEmptyBuffer(size_t requestedSize)

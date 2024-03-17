@@ -45,6 +45,10 @@
                 "Address": "127.0.0.1",
                 "Port": "12000"
             },
+            "StartupConfiguration": {
+                "StartOnLoad": true,
+                "Upscaler": 7
+            },
             "RenderModules": {
                 "Renderer": [
                     "SkyDomeRenderModule",
@@ -87,7 +91,9 @@
                         "ToneMapper": 0
                     },
                     "FSRRemoteRenderModule": {
-                        "Mode": "Relay"
+                        "Mode": "Relay",
+                        "RenderWidth": 1280,
+                        "RenderHeight": 720
                     }
                 }
             }

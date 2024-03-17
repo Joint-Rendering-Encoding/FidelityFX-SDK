@@ -65,7 +65,33 @@ void FSRRemoteRenderModule::Init(const json& initData)
 
             this->m_Connected = true;
         });
+
+        // Check if we should start the connection on load
+        m_StartOnLoad = initData.value("StartOnLoad", false);
+
+        // Connect on load
+        if (m_StartOnLoad)
+        {
+            ResolutionInfo resInfo = GetFramework()->GetResolutionInfo();
+            resInfo.RenderWidth    = initData.value("RenderWidth", resInfo.RenderWidth);
+            resInfo.RenderHeight   = initData.value("RenderHeight", resInfo.RenderHeight);
+            
+            // Set the resolution
+            m_Connection->reconfigure(resInfo);
+
+            // Connect
+            m_Connection->run_client();
+            m_Connected = true;
+        }
     }
+
+    // The framework will run MainLoop based on the outcome of this function
+    GetFramework()->SetReadyFunction([this]() {
+        if (m_RelayMode)
+            return m_Connection->getQueue().nextBufferReady() || !m_Connected;
+        else
+            return m_Connection->getQueue().nextBufferEmpty();
+    });
 
     // Register the UI section
     GetUIManager()->RegisterUIElements(m_UISection);
@@ -85,6 +111,15 @@ void FSRRemoteRenderModule::OnResize(const ResolutionInfo& resInfo)
 {
     if (!ModuleEnabled() || resInfo.RenderWidth == m_Connection->getResInfo().RenderWidth)
         return;
+
+    // If we are in relay mode, only accept the resolution that we are relaying
+    if (m_RelayMode && resInfo.RenderWidth != m_Connection->getResInfo().RenderWidth)
+    {
+        // Not only that, but also re-enable the upscaling
+        CauldronWarning(L"FSRRemoteRenderModule: Relay resolution does not match the renderer resolution. Re-enabling upscaling.");
+        GetFramework()->EnableUpscaling(true, [&](uint32_t displayWidth, uint32_t displayHeight) { return m_Connection->getResInfo(); });
+        return;
+    }
 
     // Resize the internal connection buffer
     size_t newSize = m_DX12Ops->CalculateTotalSize(getFSRResources());
@@ -110,15 +145,16 @@ void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
 void FSRRemoteRenderModule::InboundDataTransfer(double deltaTime, CommandList* pCmdList)
 {
+    // Until we are connected, we have to run the main loop
+    if (!m_Connected)
+        return;
+
     // Enter read lock
     std::lock_guard<std::mutex> lock(m_Connection.get()->getQueue().getReadLock());
 
     // Get the next ready buffer
     FSRData* buffer = m_Connection->getQueue().getNextReadyBuffer();
-
-    // If we didn't get a buffer, there is no data to process
-    if (!buffer)
-        return;
+    CauldronAssert(ASSERT_CRITICAL, buffer, L"Could not get a buffer for FSR data transfer");
 
     // Transfer the resources to the GPU
     m_DX12Ops->TransferResourcesToGPU(getFSRResources(), buffer, pCmdList);
@@ -147,26 +183,13 @@ void FSRRemoteRenderModule::OutboundDataTransfer(double deltaTime, CommandList* 
 
     // Try to get a buffer
     FSRData* buffer = m_Connection->getQueue().getNextEmptyBuffer(size);
-
-    // If we didn't get a buffer, it means that the current write index is not empty
-    if (!buffer)
-    {
-        if (!m_WarningSent)
-        {
-            CauldronWarning(L"FSRRemoteRenderModule::OutboundDataTransfer: No empty buffer available");
-            m_WarningSent = true;
-        }
-        return;
-    }
+    CauldronAssert(ASSERT_CRITICAL, buffer, L"Could not get a buffer for FSR data transfer");
 
     // Transfer the resources to the CPU
     m_DX12Ops->TransferResourcesToCPU(getFSRResources(), buffer);
 
     // Mark the buffer as ready
     m_Connection->getQueue().markBufferReady(buffer);
-
-    // Reset the warning
-    m_WarningSent = false;
 
     // FidelityFX contexts modify the set resource view heaps, so set the cauldron one back
     SetAllResourceViewHeaps(pCmdList);

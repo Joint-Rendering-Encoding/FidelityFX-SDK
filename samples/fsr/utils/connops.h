@@ -11,7 +11,13 @@ using namespace common;
 // Link with ws2_32.lib
 #pragma comment(lib, "Ws2_32.lib")
 
+#ifdef FSR_REMOTE_GPU_ONLY
+// We don't need to allocate more than 2 buffers for GPU only because we are not using it anyway
+// We keep it just because it would mean changing a lot of code :)
+constexpr int DEFAULT_BUFLEN = 2;
+#else
 constexpr int DEFAULT_BUFLEN = 6;
+#endif
 
 enum class MessageType : uint32_t
 {

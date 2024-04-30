@@ -103,8 +103,13 @@ add_dependencies(${PROJECT_NAME} ffx_fsr1_${FFX_PLATFORM_NAME})
 addManifest(${PROJECT_NAME})
 
 # Add compile definitions to identify the sample
-target_compile_definitions(${PROJECT_NAME} PRIVATE SampleName=L"FidelityFX FSR"
-										   SampleInclude=fsr)
+target_compile_definitions(${PROJECT_NAME} PRIVATE SampleName=L"FidelityFX FSR" SampleInclude=fsr)
+
+# Add FSR remote mode
+target_compile_definitions(${PROJECT_NAME} PRIVATE FSR_REMOTE_GPU_ONLY=1)
+
+# Add dirty flags
+target_compile_definitions(${PROJECT_NAME} PRIVATE FSR_REMOTE_DIRTY_TRANSLUENCY_FIX=1)
 
 # Link the correct backend in
 if (FFX_API STREQUAL CAULDRON)

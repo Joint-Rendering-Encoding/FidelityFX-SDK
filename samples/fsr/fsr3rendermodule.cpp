@@ -898,6 +898,10 @@ void FSR3RenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
 void FSR3RenderModule::PreTransCallback(double deltaTime, cauldron::CommandList* pCmdList)
 {
+#ifdef FSR_REMOTE_DIRTY_TRANSLUENCY_FIX
+    return;  // Sending opaque texture would require some changes and the end result doesn't change that much anyway.
+#endif
+
     GPUScopedProfileCapture sampleMarker(pCmdList, L"Pre-Trans (FSR3)");
 
     std::vector<Barrier> barriers;

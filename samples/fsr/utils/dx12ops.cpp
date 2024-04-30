@@ -18,6 +18,19 @@ size_t DX12Ops::CalculateTotalSize(FSRResources pResources)
 
 void DX12Ops::CreateStagingResource(WriteSource source, size_t size)
 {
+#ifdef FSR_REMOTE_GPU_ONLY
+    if (source == WriteSource::CPU)
+    {
+        if (p_StagingResource == nullptr)
+        {
+            HANDLE handle = {};
+            CauldronThrowOnFail(GetDevice()->GetImpl()->DX12Device()->OpenSharedHandleByName(L"SHARED_HANDLE_FSRDX12", GENERIC_ALL, &handle));
+            CauldronThrowOnFail(GetDevice()->GetImpl()->DX12Device()->OpenSharedHandle(handle, IID_PPV_ARGS(&p_StagingResource)));
+        }
+        return;
+    }
+#endif
+
     // Release the old resource, if any
     if (p_StagingResource)
     {
@@ -48,11 +61,20 @@ void DX12Ops::CreateStagingResource(WriteSource source, size_t size)
 
     // Heap properties
     D3D12_HEAP_PROPERTIES heapProps = {};
-    heapProps.Type                  = source == WriteSource::GPU ? D3D12_HEAP_TYPE_READBACK : D3D12_HEAP_TYPE_UPLOAD;
+#ifndef FSR_REMOTE_GPU_ONLY
+    heapProps.Type = source == WriteSource::GPU ? D3D12_HEAP_TYPE_READBACK : D3D12_HEAP_TYPE_UPLOAD;
 
     D3D12_RESOURCE_STATES state = source == WriteSource::GPU ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_GENERIC_READ;
-    HRESULT hr = pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc, state, nullptr, IID_PPV_ARGS(&p_StagingResource));
-    CauldronThrowOnFail(hr);
+    CauldronThrowOnFail(pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc, state, nullptr, IID_PPV_ARGS(&p_StagingResource)));
+#else
+    heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+    D3D12_RESOURCE_STATES state  = D3D12_RESOURCE_STATE_COMMON;
+    HANDLE                handle = {};
+
+    CauldronThrowOnFail(pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_SHARED, &bufferDesc, state, nullptr, IID_PPV_ARGS(&p_StagingResource)));
+    CauldronThrowOnFail(pDevice->CreateSharedHandle(p_StagingResource, nullptr, GENERIC_ALL, L"SHARED_HANDLE_FSRDX12", &handle));
+#endif
 }
 
 void DX12Ops::TransferResourcesToCPU(FSRResources pResources, const FSRData* pDst)
@@ -139,6 +161,11 @@ void DX12Ops::TransferResourcesToCPU(FSRResources pResources, const FSRData* pDs
     CloseHandle(mHandleFenceEvent);
     pFence->Release();
 
+#ifdef FSR_REMOTE_GPU_ONLY
+    delete pCmdList;
+    return;
+#endif
+
     uint8_t*    pData = NULL;
     D3D12_RANGE range{0, totalSize};
     HRESULT     hr = p_StagingResource->Map(0, &range, reinterpret_cast<void**>(&pData));
@@ -167,6 +194,7 @@ void DX12Ops::TransferResourcesToGPU(FSRResources pResources, FSRData* const pSr
     size_t totalSize = CalculateTotalSize(pResources);
     CreateStagingResource(WriteSource::CPU, totalSize);
 
+#ifndef FSR_REMOTE_GPU_ONLY
     // Map the staging resource
     uint8_t* pData = NULL;
     HRESULT  hr    = p_StagingResource->Map(0, NULL, reinterpret_cast<void**>(&pData));
@@ -185,6 +213,7 @@ void DX12Ops::TransferResourcesToGPU(FSRResources pResources, FSRData* const pSr
         CauldronThrowOnFail(hr);
         return;
     }
+#endif
 
     // Keep track of the current offset in the staging resource
     size_t offset = 0;

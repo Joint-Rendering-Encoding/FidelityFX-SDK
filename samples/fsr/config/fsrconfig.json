@@ -62,8 +62,8 @@
                     "FSRRemoteRenderModule"
                 ],
                 "Relay": [
-                    "FSRRemoteRenderModule",
                     "GBufferRenderModule",
+                    "FSRRemoteRenderModule",
                     "TranslucencyRenderModule",
                     "TAARenderModule",
                     "FSR2RenderModule",

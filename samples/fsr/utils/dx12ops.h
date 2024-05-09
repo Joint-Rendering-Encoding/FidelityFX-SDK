@@ -6,6 +6,9 @@
 using namespace cauldron;
 using namespace common;
 
+#define FSR_BUFFER_COUNT     10
+#define FSR_BUFFER_NAMESPACE L"FSR_REMOTE_SHARED_BUFFER"
+
 class DX12Ops
 {
 public:
@@ -13,28 +16,64 @@ public:
 
     ~DX12Ops()
     {
-        if (p_StagingResource)
+        for (size_t i = 0; i < FSR_BUFFER_COUNT; i++)
         {
-            p_StagingResource->Release();
-            p_StagingResource = nullptr;
+            ID3D12Resource* pResource = std::get<0>(p_SharedBuffer[i]);
+            ID3D12Fence*    pFence    = std::get<1>(p_SharedBuffer[i]);
+
+            if (pResource)
+            {
+                pResource->Release();
+            }
+
+            if (pFence)
+            {
+                pFence->Release();
+            }
         }
     }
 
-    // WriteSource is used to specify the source of the data to be written to the resource.
-    enum class WriteSource : uint32_t
+    enum class BufferState : UINT64
     {
-        CPU = 0,
-        GPU,
+        IDLE = 0,
+        READY,
     };
+
+    bool hasBufferWithState(BufferState state)
+    {
+        for (size_t i = 0; i < FSR_BUFFER_COUNT; i++)
+        {
+            ID3D12Resource* pResource = std::get<0>(p_SharedBuffer[i]);
+            ID3D12Fence*    pFence    = std::get<1>(p_SharedBuffer[i]);
+
+            if (pResource && pFence)
+            {
+                if (pFence->GetCompletedValue() == static_cast<UINT64>(state))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    void CreateSharedBuffers(FSRResources pResources, bool shouldCreate = false);
+
+    void TransferToSharedBuffer(FSRResources pResources, int bufferIndex, CommandList* pCmdList)
+    {
+        PerformTransfer(pResources, bufferIndex, pCmdList, true);
+    }
+
+    void TransferFromSharedBuffer(FSRResources pResources, int bufferIndex, CommandList* pCmdList)
+    {
+        PerformTransfer(pResources, bufferIndex, pCmdList, false);
+    }
+
+private:
+    std::tuple<ID3D12Resource*, ID3D12Fence*> p_SharedBuffer[FSR_BUFFER_COUNT];
 
     size_t CalculateTotalSize(FSRResources pResources);
 
-    void CreateStagingResource(WriteSource source, size_t size);
-
-    void TransferResourcesToCPU(FSRResources pResources, const FSRData* pDst);
-
-    void TransferResourcesToGPU(FSRResources pResources, FSRData* const pSrc, CommandList* pCmdList);
-
-private:
-    ID3D12Resource* p_StagingResource = nullptr;
+    void PerformTransfer(FSRResources pResources, int bufferIndex, CommandList* pCmdList, bool toSharedBuffer);
 };

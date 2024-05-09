@@ -5,7 +5,6 @@
 #include "core/uimanager.h"
 
 #include "utils/dx12ops.h"
-#include "utils/connops.h"
 #include "common.h"
 
 #include <functional>
@@ -21,8 +20,7 @@ namespace cauldron
  * @class FSRRemoteRenderModule
  *
  * FSRRemoteRenderModule takes care of:
- *      - Copying necessary resources from the GPU to the CPU
- *      - Sending the resources to the relay server
+ *      - Copying necessary resources from/to the GPU shared buffers
  */
 class FSRRemoteRenderModule : public cauldron::RenderModule
 {
@@ -54,23 +52,20 @@ public:
      * @brief   Recreate the FSR Remote API Context to resize internal resources. Called by the framework when the resolution changes.
      */
     void OnResize(const cauldron::ResolutionInfo& resInfo) override;
-    
-    // Public variables
-    bool m_Connected = false;
 
 private:
-    // For UI params
-    cauldron::UISection m_UISection;
+    // Resolution info
+    uint32_t m_RenderWidth  = 2560;
+    uint32_t m_RenderHeight = 1440;
 
     // FSR Remote variables
-    bool                        m_StartOnLoad = false;
-    bool                        m_RelayMode   = false;
-    std::unique_ptr<Connection> m_Connection;
+    bool           m_RelayMode   = false;
+    int            m_BufferIndex = 0;
 
     // DX12Ops
     std::unique_ptr<DX12Ops> m_DX12Ops;
 
-    // FSR Remote CPU-GPU Highway 101
+    // FSR Remote GPU Transfer functions
     void OutboundDataTransfer(double deltaTime, cauldron::CommandList* pCmdList);
     void InboundDataTransfer(double deltaTime, cauldron::CommandList* pCmdList);
 
@@ -78,15 +73,11 @@ private:
     const cauldron::Texture* m_pColorTarget     = nullptr;
     const cauldron::Texture* m_pDepthTarget     = nullptr;
     const cauldron::Texture* m_pMotionVectors   = nullptr;
-    const cauldron::Texture* m_pReactiveMask    = nullptr;
-    const cauldron::Texture* m_pCompositionMask = nullptr;
 
     FSRResources getFSRResources() const
     {
         return {m_pColorTarget->GetResource(),
                 m_pDepthTarget->GetResource(),
-                m_pMotionVectors->GetResource(),
-                m_pReactiveMask->GetResource(),
-                m_pCompositionMask->GetResource()};
+                m_pMotionVectors->GetResource()};
     }
 };

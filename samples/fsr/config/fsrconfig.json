@@ -40,13 +40,8 @@
         },
 
         "Remote": {
-            "Mode": "Renderer",
-            "Connection": {
-                "Address": "127.0.0.1",
-                "Port": "12000"
-            },
+            "Mode": "Relay",
             "StartupConfiguration": {
-                "StartOnLoad": true,
                 "Upscaler": 7
             },
             "RenderModules": {
@@ -80,7 +75,9 @@
                         "ToneMapper": 5
                     },
                     "FSRRemoteRenderModule": {
-                        "Mode": "Renderer"
+                        "Mode": "Renderer",
+                        "RenderWidth": 1920,
+                        "RenderHeight": 1080
                     },
                     "SkyDomeRenderModule": {
                         "Procedural": true
@@ -92,8 +89,8 @@
                     },
                     "FSRRemoteRenderModule": {
                         "Mode": "Relay",
-                        "RenderWidth": 1280,
-                        "RenderHeight": 720
+                        "RenderWidth": 1920,
+                        "RenderHeight": 1080
                     }
                 }
             }

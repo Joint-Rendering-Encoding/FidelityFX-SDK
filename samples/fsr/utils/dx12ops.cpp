@@ -16,76 +16,78 @@ size_t DX12Ops::CalculateTotalSize(FSRResources pResources)
     return totalSize;
 }
 
-void DX12Ops::CreateStagingResource(WriteSource source, size_t size)
+void DX12Ops::CreateSharedBuffers(FSRResources pResources, bool shouldCreate)
 {
-#ifdef FSR_REMOTE_GPU_ONLY
-    if (source == WriteSource::CPU)
-    {
-        if (p_StagingResource == nullptr)
-        {
-            HANDLE handle = {};
-            CauldronThrowOnFail(GetDevice()->GetImpl()->DX12Device()->OpenSharedHandleByName(L"SHARED_HANDLE_FSRDX12", GENERIC_ALL, &handle));
-            CauldronThrowOnFail(GetDevice()->GetImpl()->DX12Device()->OpenSharedHandle(handle, IID_PPV_ARGS(&p_StagingResource)));
-        }
-        return;
-    }
-#endif
-
-    // Release the old resource, if any
-    if (p_StagingResource)
-    {
-        // Check if the requested size is the same as the current size
-        D3D12_RESOURCE_DESC desc = p_StagingResource->GetDesc();
-        if (desc.Width == size)
-            return;
-
-        p_StagingResource->Release();
-        p_StagingResource = nullptr;
-    }
-
     ID3D12Device* pDevice = GetDevice()->GetImpl()->DX12Device();
 
-    // Create a staging resource
-    D3D12_RESOURCE_DESC bufferDesc = {};
-    bufferDesc.Alignment           = 0;
-    bufferDesc.DepthOrArraySize    = 1;
-    bufferDesc.Dimension           = D3D12_RESOURCE_DIMENSION_BUFFER;
-    bufferDesc.Flags               = D3D12_RESOURCE_FLAG_NONE;
-    bufferDesc.Format              = DXGI_FORMAT_UNKNOWN;
-    bufferDesc.Height              = 1;
-    bufferDesc.Width               = size;
-    bufferDesc.Layout              = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    bufferDesc.MipLevels           = 1;
-    bufferDesc.SampleDesc.Count    = 1;
-    bufferDesc.SampleDesc.Quality  = 0;
+    for (size_t i = 0; i < FSR_BUFFER_COUNT; i++)
+    {
+        ID3D12Resource* pResource    = nullptr;
+        ID3D12Fence*    pFence       = nullptr;
+        std::wstring    resourceName = FSR_BUFFER_NAMESPACE + std::to_wstring(i) + L"_RESOURCE";
+        std::wstring    fenceName    = FSR_BUFFER_NAMESPACE + std::to_wstring(i) + L"_FENCE";
 
-    // Heap properties
-    D3D12_HEAP_PROPERTIES heapProps = {};
-#ifndef FSR_REMOTE_GPU_ONLY
-    heapProps.Type = source == WriteSource::GPU ? D3D12_HEAP_TYPE_READBACK : D3D12_HEAP_TYPE_UPLOAD;
+        if (shouldCreate)
+        {
+            // Create a shared buffer
+            D3D12_RESOURCE_DESC bufferDesc = {};
+            bufferDesc.Alignment           = 0;
+            bufferDesc.DepthOrArraySize    = 1;
+            bufferDesc.Dimension           = D3D12_RESOURCE_DIMENSION_BUFFER;
+            bufferDesc.Flags               = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;  // D3D12_RESOURCE_FLAG_NONE
+            bufferDesc.Format              = DXGI_FORMAT_UNKNOWN;
+            bufferDesc.Height              = 1;
+            bufferDesc.Width               = CalculateTotalSize(pResources);
+            bufferDesc.Layout              = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            bufferDesc.MipLevels           = 1;
+            bufferDesc.SampleDesc.Count    = 1;
+            bufferDesc.SampleDesc.Quality  = 0;
 
-    D3D12_RESOURCE_STATES state = source == WriteSource::GPU ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_GENERIC_READ;
-    CauldronThrowOnFail(pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc, state, nullptr, IID_PPV_ARGS(&p_StagingResource)));
-#else
-    heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+            // Heap properties
+            D3D12_HEAP_PROPERTIES heapProps = {};
+            heapProps.Type                  = D3D12_HEAP_TYPE_DEFAULT;
 
-    D3D12_RESOURCE_STATES state  = D3D12_RESOURCE_STATE_COMMON;
-    HANDLE                handle = {};
+            D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
+            CauldronThrowOnFail(pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_SHARED, &bufferDesc, state, nullptr, IID_PPV_ARGS(&pResource)));
 
-    CauldronThrowOnFail(pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_SHARED, &bufferDesc, state, nullptr, IID_PPV_ARGS(&p_StagingResource)));
-    CauldronThrowOnFail(pDevice->CreateSharedHandle(p_StagingResource, nullptr, GENERIC_ALL, L"SHARED_HANDLE_FSRDX12", &handle));
-#endif
+            // Create a fence
+            CauldronThrowOnFail(pDevice->CreateFence(static_cast<UINT64>(BufferState::IDLE), D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&pFence)));
+
+            // Create the shared handles
+            HANDLE handle = {};
+            CauldronThrowOnFail(pDevice->CreateSharedHandle(pResource, nullptr, GENERIC_ALL, resourceName.c_str(), &handle));
+
+            handle = {};
+            CauldronThrowOnFail(pDevice->CreateSharedHandle(pFence, nullptr, GENERIC_ALL, fenceName.c_str(), &handle));
+        }
+        else
+        {
+            // Open the shared handles
+            HANDLE handle = {};
+            CauldronThrowOnFail(pDevice->OpenSharedHandleByName(resourceName.c_str(), GENERIC_ALL, &handle));
+            CauldronThrowOnFail(pDevice->OpenSharedHandle(handle, IID_PPV_ARGS(&pResource)));
+
+            handle = {};
+            CauldronThrowOnFail(pDevice->OpenSharedHandleByName(fenceName.c_str(), GENERIC_ALL, &handle));
+            CauldronThrowOnFail(pDevice->OpenSharedHandle(handle, IID_PPV_ARGS(&pFence)));
+        }
+
+        p_SharedBuffer[i] = std::make_tuple(pResource, pFence);
+    }
 }
 
-void DX12Ops::TransferResourcesToCPU(FSRResources pResources, const FSRData* pDst)
+void DX12Ops::PerformTransfer(FSRResources pResources, int bufferIndex, CommandList* pCmdList, bool toSharedBuffer)
 {
-    // Create a staging resource
-    size_t totalSize = CalculateTotalSize(pResources);
-    CreateStagingResource(WriteSource::GPU, totalSize);
+    // Get the device and command list
+    ID3D12Resource*             pSharedResource = std::get<0>(p_SharedBuffer[bufferIndex]);
+    ID3D12Fence*                pSharedFence    = std::get<1>(p_SharedBuffer[bufferIndex]);
+    ID3D12Device*               pDevice         = GetDevice()->GetImpl()->DX12Device();
+    ID3D12GraphicsCommandList2* pCmd            = pCmdList->GetImpl()->DX12CmdList();
+    ID3D12CommandQueue*         pQueue          = GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics);
 
-    // Create a command list to be used for the copy operation
-    ID3D12Device* pDevice  = GetDevice()->GetImpl()->DX12Device();
-    CommandList*  pCmdList = GetDevice()->CreateCommandList(L"ResourceToCPU", CommandQueue::Graphics);
+    // Verify the shared buffer is in the correct state
+    UINT64 desiredState = static_cast<UINT64>(toSharedBuffer ? BufferState::IDLE : BufferState::READY);
+    CauldronAssert(ASSERT_CRITICAL, pSharedFence->GetCompletedValue() == desiredState, L"The shared buffer is not in the correct state");
 
     // Keep track of the current offset in the staging resource
     size_t offset = 0;
@@ -97,36 +99,43 @@ void DX12Ops::TransferResourcesToCPU(FSRResources pResources, const FSRData* pDs
         ResourceFormat      format    = pResource->GetTextureResource()->GetFormat();
         UINT64              size      = desc.Width * desc.Height * GetResourceFormatStride(format);
 
-        // Transition the resource to copy source
+        // Transition the resource to appropriate state
         {
             D3D12_RESOURCE_BARRIER barrier{};
             barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
             barrier.Transition.pResource   = pResource->GetImpl()->DX12Resource();
             barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
             barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-            barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
+            barrier.Transition.StateAfter  = toSharedBuffer ? D3D12_RESOURCE_STATE_COPY_SOURCE : D3D12_RESOURCE_STATE_COPY_DEST;
 
-            pCmdList->GetImpl()->DX12CmdList()->ResourceBarrier(1, &barrier);
+            pCmd->ResourceBarrier(1, &barrier);
         }
 
-        // Copy the data from the GPU resource to the staging resource
+        // Perform the transfer command
         {
-            D3D12_TEXTURE_COPY_LOCATION source{};
-            source.Type             = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-            source.pResource        = pResource->GetImpl()->DX12Resource();
-            source.SubresourceIndex = 0;
+            D3D12_TEXTURE_COPY_LOCATION actualResource{};
+            actualResource.Type             = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            actualResource.pResource        = pResource->GetImpl()->DX12Resource();
+            actualResource.SubresourceIndex = 0;
 
-            D3D12_TEXTURE_COPY_LOCATION destination{};
-            destination.Type                               = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-            destination.pResource                          = p_StagingResource;
-            destination.PlacedFootprint.Footprint.Depth    = 1;
-            destination.PlacedFootprint.Footprint.Height   = desc.Height;
-            destination.PlacedFootprint.Footprint.Width    = static_cast<UINT>(desc.Width);
-            destination.PlacedFootprint.Footprint.Format   = GetDXGIFormat(format);
-            destination.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(desc.Width * GetResourceFormatStride(format));
-            destination.PlacedFootprint.Offset             = offset;
+            D3D12_TEXTURE_COPY_LOCATION sharedResource{};
+            sharedResource.Type                               = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+            sharedResource.pResource                          = pSharedResource;
+            sharedResource.PlacedFootprint.Footprint.Depth    = 1;
+            sharedResource.PlacedFootprint.Footprint.Height   = desc.Height;
+            sharedResource.PlacedFootprint.Footprint.Width    = static_cast<UINT>(desc.Width);
+            sharedResource.PlacedFootprint.Footprint.Format   = GetDXGIFormat(format);
+            sharedResource.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(desc.Width * GetResourceFormatStride(format));
+            sharedResource.PlacedFootprint.Offset             = offset;
 
-            pCmdList->GetImpl()->DX12CmdList()->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
+            if (toSharedBuffer)
+            {
+                pCmd->CopyTextureRegion(&sharedResource, 0, 0, 0, &actualResource, nullptr);
+            }
+            else
+            {
+                pCmd->CopyTextureRegion(&actualResource, 0, 0, 0, &sharedResource, nullptr);
+            }
         }
 
         // Transition the resource back to its original state
@@ -135,165 +144,17 @@ void DX12Ops::TransferResourcesToCPU(FSRResources pResources, const FSRData* pDs
             barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
             barrier.Transition.pResource   = pResource->GetImpl()->DX12Resource();
             barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+            barrier.Transition.StateBefore = toSharedBuffer ? D3D12_RESOURCE_STATE_COPY_SOURCE : D3D12_RESOURCE_STATE_COPY_DEST;
             barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
 
-            pCmdList->GetImpl()->DX12CmdList()->ResourceBarrier(1, &barrier);
+            pCmd->ResourceBarrier(1, &barrier);
         }
 
         // Update the offset
         offset += size;
     }
 
-    // Close the command list
-    ID3D12Fence* pFence;
-    CauldronThrowOnFail(pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));
-    CauldronThrowOnFail(GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->Signal(pFence, 1));
-    CauldronThrowOnFail(pCmdList->GetImpl()->DX12CmdList()->Close());
-
-    ID3D12CommandList* CmdListList[] = {pCmdList->GetImpl()->DX12CmdList()};
-    GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->ExecuteCommandLists(1, CmdListList);
-
-    // Wait for the command list to finish executing
-    HANDLE mHandleFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-    pFence->SetEventOnCompletion(1, mHandleFenceEvent);
-    WaitForSingleObject(mHandleFenceEvent, INFINITE);
-    CloseHandle(mHandleFenceEvent);
-    pFence->Release();
-
-#ifdef FSR_REMOTE_GPU_ONLY
-    delete pCmdList;
+    // Signal the fence to indicate the transfer is complete
+    CauldronThrowOnFail(pQueue->Signal(pSharedFence, static_cast<UINT64>(toSharedBuffer ? BufferState::READY : BufferState::IDLE)));
     return;
-#endif
-
-    uint8_t*    pData = NULL;
-    D3D12_RANGE range{0, totalSize};
-    HRESULT     hr = p_StagingResource->Map(0, &range, reinterpret_cast<void**>(&pData));
-
-    // Copy the data to the destination pointer
-    if (SUCCEEDED(hr))
-    {
-        // Copy memory to destination
-        memcpy(pDst->get(), pData, totalSize);
-        p_StagingResource->Unmap(0, NULL);
-    }
-    else
-    {
-        // Handle error
-        p_StagingResource->Release();
-        CauldronThrowOnFail(hr);
-    }
-
-    // Delete the command list
-    delete pCmdList;
-}
-
-void DX12Ops::TransferResourcesToGPU(FSRResources pResources, FSRData* const pSrc, CommandList* pCmdList)
-{
-    // Create a staging resource
-    size_t totalSize = CalculateTotalSize(pResources);
-    CreateStagingResource(WriteSource::CPU, totalSize);
-
-#ifndef FSR_REMOTE_GPU_ONLY
-    // Map the staging resource
-    uint8_t* pData = NULL;
-    HRESULT  hr    = p_StagingResource->Map(0, NULL, reinterpret_cast<void**>(&pData));
-
-    // Copy the data to the staging resource
-    if (SUCCEEDED(hr))
-    {
-        // Copy memory to destination
-        memcpy(pData, pSrc->get(), totalSize);
-        p_StagingResource->Unmap(0, NULL);
-    }
-    else
-    {
-        // Handle error
-        p_StagingResource->Release();
-        CauldronThrowOnFail(hr);
-        return;
-    }
-#endif
-
-    // Keep track of the current offset in the staging resource
-    size_t offset = 0;
-
-    for (size_t i = 0; i < pResources.size(); i++)
-    {
-        GPUResource*        pResource = const_cast<GPUResource*>(pResources[i]);
-        D3D12_RESOURCE_DESC desc      = pResource->GetImpl()->DX12Desc();
-        ResourceFormat      format    = pResource->GetTextureResource()->GetFormat();
-        UINT64              size      = desc.Width * desc.Height * GetResourceFormatStride(format);
-
-        // Transition the resource to copy destination
-        {
-            D3D12_RESOURCE_BARRIER barrier{};
-            barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barrier.Transition.pResource   = pResource->GetImpl()->DX12Resource();
-            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-            barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
-
-            pCmdList->GetImpl()->DX12CmdList()->ResourceBarrier(1, &barrier);
-        }
-
-        // Transition the staging resource to copy source
-        {
-            D3D12_RESOURCE_BARRIER barrier{};
-            barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barrier.Transition.pResource   = p_StagingResource;
-            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_GENERIC_READ;
-            barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
-
-            pCmdList->GetImpl()->DX12CmdList()->ResourceBarrier(1, &barrier);
-        }
-
-        // Copy the data from the staging resource to the GPU resource
-        {
-            D3D12_TEXTURE_COPY_LOCATION source{};
-            source.Type                               = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-            source.pResource                          = p_StagingResource;
-            source.PlacedFootprint.Footprint.Depth    = 1;
-            source.PlacedFootprint.Footprint.Height   = desc.Height;
-            source.PlacedFootprint.Footprint.Width    = static_cast<UINT>(desc.Width);
-            source.PlacedFootprint.Footprint.Format   = GetDXGIFormat(format);
-            source.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(desc.Width * GetResourceFormatStride(format));
-            source.PlacedFootprint.Offset             = offset;
-
-            D3D12_TEXTURE_COPY_LOCATION destination{};
-            destination.Type             = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-            destination.pResource        = pResource->GetImpl()->DX12Resource();
-            destination.SubresourceIndex = 0;
-
-            pCmdList->GetImpl()->DX12CmdList()->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
-        }
-
-        // Transition the staging resource back to its original state
-        {
-            D3D12_RESOURCE_BARRIER barrier{};
-            barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barrier.Transition.pResource   = p_StagingResource;
-            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-            barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_GENERIC_READ;
-
-            pCmdList->GetImpl()->DX12CmdList()->ResourceBarrier(1, &barrier);
-        }
-
-        // Transition the resource back to its original state
-        {
-            D3D12_RESOURCE_BARRIER barrier{};
-            barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barrier.Transition.pResource   = pResource->GetImpl()->DX12Resource();
-            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-            barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-
-            pCmdList->GetImpl()->DX12CmdList()->ResourceBarrier(1, &barrier);
-        }
-
-        // Update the offset
-        offset += size;
-    }
 }

@@ -6,6 +6,5 @@
 
 namespace common
 {
-    typedef std::array<const cauldron::GPUResource*, 5> FSRResources;
-    typedef std::unique_ptr<uint8_t[]>                  FSRData;
+    typedef std::array<const cauldron::GPUResource*, 3> FSRResources;
 }  // namespace common

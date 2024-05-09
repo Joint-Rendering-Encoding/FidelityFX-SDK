@@ -41,11 +41,6 @@ set(dx12_operations
     ${CMAKE_CURRENT_SOURCE_DIR}/utils/dx12ops.h
     ${CMAKE_CURRENT_SOURCE_DIR}/utils/dx12ops.cpp)
 
-# Connection Operations
-set(conn_operations
-    ${CMAKE_CURRENT_SOURCE_DIR}/utils/connops.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/utils/connops.cpp)
-
 # FSR render module files
 file(GLOB hlslCompile_src
 	${CMAKE_CURRENT_SOURCE_DIR}/HLSLCompile/*.h
@@ -71,7 +66,7 @@ set(animated_media_src ${CMAKE_CURRENT_SOURCE_DIR}/media/checkerboard.dds ${CMAK
 copyCommand("${animated_media_src}" ${BIN_OUTPUT}/media/textures)
 
 # Add the sample to the solution
-add_executable(${PROJECT_NAME} WIN32 ${default_icon_src} ${default_entry_point} ${dx12_operations} ${conn_operations} ${fsr_sample_files} ${config_file} ${fsr_src} ${hlslCompile_src} ${fsr_shaders} ${ffx_remap} ${animated_media_src})
+add_executable(${PROJECT_NAME} WIN32 ${default_icon_src} ${default_entry_point} ${dx12_operations} ${fsr_sample_files} ${config_file} ${fsr_src} ${hlslCompile_src} ${fsr_shaders} ${ffx_remap} ${animated_media_src})
 
 # Setup the correct exe based on backend name
 set(EXE_OUT_NAME ${PROJECT_NAME}_)
@@ -105,9 +100,6 @@ addManifest(${PROJECT_NAME})
 # Add compile definitions to identify the sample
 target_compile_definitions(${PROJECT_NAME} PRIVATE SampleName=L"FidelityFX FSR" SampleInclude=fsr)
 
-# Add FSR remote mode
-target_compile_definitions(${PROJECT_NAME} PRIVATE FSR_REMOTE_GPU_ONLY=1)
-
 # Add dirty flags
 target_compile_definitions(${PROJECT_NAME} PRIVATE FSR_REMOTE_DIRTY_TRANSLUENCY_FIX=1)
 
@@ -126,7 +118,7 @@ endif()
 source_group(""					FILES ${default_entry_point})
 source_group(""					FILES ${ffx_remap})
 source_group("Sample" 				FILES ${fsr_sample_files})
-source_group("Sample\\Utils" 		FILES ${dx12_operations} ${conn_operations})
+source_group("Sample\\Utils" 		FILES ${dx12_operations})
 source_group("Icon"    				FILES ${default_icon_src})
 source_group("Config" 				FILES ${config_file})
 source_group("RenderModule"			FILES ${fsr_src})

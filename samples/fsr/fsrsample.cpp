@@ -68,8 +68,6 @@ void FSRSample::ParseSampleConfig()
 
     // Set the startup upscaler method
     m_UIMethod = remoteConfig["StartupConfiguration"]["Upscaler"].get<UpscaleMethod>();
-    m_UpscalingOnStart = remoteConfig["StartupConfiguration"]["StartOnLoad"];
-    configData["RenderModuleOverrides"]["FSRRemoteRenderModule"]["StartOnLoad"] = m_UpscalingOnStart;
 
     // Let the framework parse all the "known" options for us
     ParseConfigData(configData);

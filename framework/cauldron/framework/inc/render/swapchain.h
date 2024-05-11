@@ -150,6 +150,10 @@ namespace cauldron
         virtual SwapChainInternal* GetImpl() = 0;
         virtual const SwapChainInternal* GetImpl() const = 0;
 
+        /**
+         * @brief   Returns the state of VSync.
+         */
+        bool IsVSyncEnabled() const { return m_VSyncEnabled; }
 
     private:
         // No copy, No move

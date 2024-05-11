@@ -318,6 +318,11 @@ namespace cauldron
         virtual int32_t Init();
 
         /**
+         * @brief   Notifies the framework that the device has been initialized. Override to apply any post-device initialization.
+         */
+        virtual void PostDeviceInit(){};
+
+        /**
          * @brief   Framework pre-runtime callback. Called before entering main loop 
          *          after framework/sample has been initialized. Override to modify/override 
          *          framework pre-run.

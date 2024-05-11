@@ -24,9 +24,12 @@
 #include "fsr3upscalerendermodule.h"
 #include "fsr3rendermodule.h"
 #include "fsrremoterendermodule.h"
+#include "dlssupscalerendermodule.h"
 #include "upscalerendermodule.h"
 #include "fsr1rendermodule.h"
 #include "upscalerendermodule.h"
+
+#include <sl.h>
 
 #include "rendermoduleregistry.h"
 #include "taa/taarendermodule.h"
@@ -38,6 +41,30 @@
 #include "misc/assert.h"
 
 using namespace cauldron;
+
+int32_t FSRSample::Init()
+{
+    if (m_RemoteMode == RemoteMode::Relay)
+    {
+        // Initialize Streamline SDK
+        sl::Preferences pref{};
+        sl::Feature     features[] = {sl::kFeatureDLSS};
+        pref.featuresToLoad        = features;
+        pref.numFeaturesToLoad     = _countof(features);
+
+        sl::Result res = slInit(pref);
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to initialize Streamline SDK (%d)", res);
+    }
+
+    // Call the base class initialization
+    return Framework::Init();
+}
+
+void FSRSample::PostDeviceInit()
+{
+    if (m_RemoteMode == RemoteMode::Relay)
+        slSetD3DDevice(GetDevice()->GetImpl()->DX12Device());
+}
 
 // Read in sample-specific configuration parameters.
 // Cauldron defaults may also be overridden at this point
@@ -73,11 +100,6 @@ void FSRSample::ParseSampleConfig()
     ParseConfigData(configData);
 }
 
-void FSRSample::ParseSampleCmdLine(const wchar_t* cmdLine)
-{
-    // Process any command line parameters the sample looks for here
-}
-
 // Register sample's render modules so the factory can spawn them
 void FSRSample::RegisterSampleModules()
 {
@@ -96,6 +118,7 @@ void FSRSample::RegisterSampleModules()
     else
     {
         // Register the upscaler render modules
+        RenderModuleFactory::RegisterModule<DLSSUpscaleRenderModule>("DLSSUpscaleRenderModule");
         RenderModuleFactory::RegisterModule<FSR3RenderModule>("FSR3RenderModule");
         RenderModuleFactory::RegisterModule<FSR3UpscaleRenderModule>("FSR3UpscaleRenderModule");
         RenderModuleFactory::RegisterModule<FSR2RenderModule>("FSR2RenderModule");
@@ -119,6 +142,7 @@ int32_t FSRSample::DoSampleInit()
         return 0;
 
     // Store pointers to various render modules
+    m_pDLSSUpscaleRenderModule = static_cast<DLSSUpscaleRenderModule*>(GetFramework()->GetRenderModule("DLSSUpscaleRenderModule"));
     m_pFSR2RenderModule        = static_cast<FSR2RenderModule*>(GetFramework()->GetRenderModule("FSR2RenderModule"));
     m_pFSR3UpscaleRenderModule = static_cast<FSR3UpscaleRenderModule*>(GetFramework()->GetRenderModule("FSR3UpscaleRenderModule"));
     m_pFSR3RenderModule        = static_cast<FSR3RenderModule*>(GetFramework()->GetRenderModule("FSR3RenderModule"));
@@ -130,6 +154,7 @@ int32_t FSRSample::DoSampleInit()
 
     m_pTAARenderModule->EnableModule(false);
 
+    CauldronAssert(ASSERT_CRITICAL, m_pDLSSUpscaleRenderModule, L"FidelityFX FSR Sample: Error: Could not find DLSSUpscale render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pFSR3RenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR3 render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pFSR3UpscaleRenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR3Upscale render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pFSR2RenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR2 render module.");
@@ -166,7 +191,7 @@ int32_t FSRSample::DoSampleInit()
 
 #ifdef FFX_API_DX12
     // Setup upscale method options
-    const char*              upscalers[] = {"Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2", "FSR3Upscale", "FSR3"};
+    const char*              upscalers[] = {"Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2", "FSR3Upscale", "FSR3", "DLSSUpscale"};
     std::vector<std::string> comboOptions;
     comboOptions.assign(upscalers, upscalers + _countof(upscalers));
 
@@ -234,6 +259,9 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
     case UpscaleMethod::FSR3:
         m_pCurrentUpscaler                = m_pFSR3RenderModule;
         m_pFSR3RenderModule->m_NeedReInit = false;
+        break;
+    case UpscaleMethod::DLSSUPSCALEONLY:
+        m_pCurrentUpscaler = m_pDLSSUpscaleRenderModule;
         break;
     default:
         CauldronCritical(L"Unsupported upscaler requested.");

@@ -23,6 +23,7 @@
 
 #include "core/framework.h"
 
+class DLSSUpscaleRenderModule;
 class FSRRemoteRenderModule;
 class FSR3RenderModule;
 class FSR3UpscaleRenderModule;
@@ -62,9 +63,10 @@ public:
     virtual ~FSRSample() = default;
 
     // Overrides
-    virtual void ParseSampleConfig() override;
-    virtual void ParseSampleCmdLine(const wchar_t* cmdLine) override;
-    virtual void RegisterSampleModules() override;
+    virtual int32_t Init() override;
+    virtual void    PostDeviceInit() override;
+    virtual void    ParseSampleConfig() override;
+    virtual void    RegisterSampleModules() override;
 
     virtual int32_t DoSampleInit() override;
     virtual void    DoSampleUpdates(double deltaTime) override;
@@ -81,6 +83,7 @@ private:
         FSR2,
         FSR3UPSCALEONLY,
         FSR3,
+        DLSSUPSCALEONLY,
 
         Count
     };
@@ -100,6 +103,7 @@ private:
     UpscaleMethod           m_UIMethod         = UpscaleMethod::Native;
     cauldron::RenderModule* m_pCurrentUpscaler = nullptr;
 
+    DLSSUpscaleRenderModule*  m_pDLSSUpscaleRenderModule = nullptr;
     FSRRemoteRenderModule*    m_pFSRRemoteRenderModule   = nullptr;
     FSR3RenderModule*         m_pFSR3RenderModule        = nullptr;
     FSR3UpscaleRenderModule*  m_pFSR3UpscaleRenderModule = nullptr;

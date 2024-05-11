@@ -1,12 +1,19 @@
 import os
+import sys
 import json
 import copy
 import time
-import psutil
-import pynvml
 import signal
 import argparse
 import subprocess
+import psutil
+import pynvml
+
+__doc__ = """
+This script is used to run FSR tests. It starts the renderer and relay processes
+and collects metrics from them and the GPU. The metrics are then printed to the
+console in JSON format.
+"""
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FSR_DIR = os.path.join(SCRIPT_DIR, "bin")
@@ -20,7 +27,7 @@ UPSCALERS = [
     "FSR2",
     "FSR3Upscale",
     "FSR3",
-    "DLSS",
+    "DLSSUpscale",
 ]
 
 # Get the default configf
@@ -111,9 +118,15 @@ def parse_args():
     parser.add_argument(
         "--upscaler",
         type=str,
-        default="FSR3",
+        default="DLSSUpscale",
         choices=UPSCALERS,
         help="Upscaler to use",
+    )
+    parser.add_argument(
+        "--skip-relay",
+        action="store_true",
+        default=False,
+        help="Skip the relay process",
     )
     return parser.parse_args()
 
@@ -171,30 +184,32 @@ if __name__ == "__main__":
         "Relay", args.render_res, args.present_res, args.scene, args.upscaler
     )
     apply_config(relay_config)
-    relay = subprocess.Popen(
-        [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe")],
-        cwd=FSR_DIR,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        stdin=subprocess.DEVNULL,
-    )
-    print(f"Relay PID: {relay.pid}")
+    if not args.skip_relay:
+        relay = subprocess.Popen(
+            [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe")],
+            cwd=FSR_DIR,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+        print(f"Relay PID: {relay.pid}")
 
     # Register signal handlers
     def cleanup(sig, frame):
         print("Cleaning up...")
-        renderer.kill()
-        relay.kill()
-
-        # Shutdown NVML
         pynvml.nvmlShutdown()
+        renderer.kill()
+        if not args.skip_relay:
+            relay.kill()
+        sys.exit(0)
 
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
     # Collect live metrics
     renderer_process = psutil.Process(renderer.pid)
-    relay_process = psutil.Process(relay.pid)
+    if not args.skip_relay:
+        relay_process = psutil.Process(relay.pid)
 
     def get_metrics_for(process):
         return {
@@ -222,7 +237,11 @@ if __name__ == "__main__":
         try:
             sample = {
                 "renderer": get_metrics_for(renderer_process),
-                "relay": get_metrics_for(relay_process),
+                **(
+                    {"relay": get_metrics_for(relay_process)}
+                    if not args.skip_relay
+                    else {}
+                ),
                 "gpu": get_gpu_metrics(),
             }
 

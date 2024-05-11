@@ -98,6 +98,7 @@ add_subdirectory(libs/renderdoc)
 add_subdirectory(libs/stb)
 add_subdirectory(libs/vectormath)
 add_subdirectory(libs/pix)
+add_subdirectory(libs/streamlinesdk)
 
 #Add sources
 find_package(Vulkan REQUIRED)

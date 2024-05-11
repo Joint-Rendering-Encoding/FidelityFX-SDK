@@ -106,6 +106,7 @@ else()
 		option(FFX_FSR1 "Build FFX FSR1 API" ON)
 		option(FFX_FSR2 "Build FFX FSR2 API" ON)
 		option(FFX_FSR3 "Build FFX FSR3 API" ON)
+        option(FFX_DLSS "Build DLSS API" ON)
 	endif()
 
     if (BUILD_TYPE STREQUAL FFX_CACAO)

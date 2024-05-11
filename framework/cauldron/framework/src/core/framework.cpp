@@ -262,6 +262,7 @@ namespace cauldron
         Log::Write(LOGLEVEL_TRACE, L"Initializing graphics device.");
         m_pDevice = Device::CreateDevice();
         if (!m_pDevice) return -1;
+        PostDeviceInit();
 
         Log::Write(LOGLEVEL_TRACE, L"Initializing graphics resource view allocator.");
         m_pResourceViewAllocator = ResourceViewAllocator::CreateResourceViewAllocator();

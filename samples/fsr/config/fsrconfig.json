@@ -40,7 +40,7 @@
         },
 
         "Remote": {
-            "Mode": "Relay",
+            "Mode": "Renderer",
             "StartupConfiguration": {
                 "Upscaler": 7
             },
@@ -64,6 +64,7 @@
                     "FSR2RenderModule",
                     "FSR3UpscaleRenderModule",
                     "FSR3RenderModule",
+                    "DLSSUpscaleRenderModule",
                     "UpscaleRenderModule",
                     "ToneMappingRenderModule",
                     "FSR1RenderModule"

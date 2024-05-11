@@ -73,9 +73,9 @@ set(EXE_OUT_NAME ${PROJECT_NAME}_)
 
 # Link everything
 if (FFX_API STREQUAL CAULDRON)
-target_link_libraries(${PROJECT_NAME} LINK_PUBLIC Framework RenderModules d3dcompiler ffx_backend_cauldron_${FFX_PLATFORM_NAME} ffx_fsr3_${FFX_PLATFORM_NAME} ffx_fsr3upscaler_${FFX_PLATFORM_NAME} ffx_frameinterpolation_${FFX_PLATFORM_NAME} ffx_opticalflow_${FFX_PLATFORM_NAME} ffx_fsr2_${FFX_PLATFORM_NAME} ffx_fsr1_${FFX_PLATFORM_NAME})
+target_link_libraries(${PROJECT_NAME} LINK_PUBLIC Framework RenderModules d3dcompiler ffx_backend_cauldron_${FFX_PLATFORM_NAME} ffx_dlss_${FFX_PLATFORM_NAME} ffx_fsr3_${FFX_PLATFORM_NAME} ffx_fsr3upscaler_${FFX_PLATFORM_NAME} ffx_frameinterpolation_${FFX_PLATFORM_NAME} ffx_opticalflow_${FFX_PLATFORM_NAME} ffx_fsr2_${FFX_PLATFORM_NAME} ffx_fsr1_${FFX_PLATFORM_NAME})
 else()
-target_link_libraries(${PROJECT_NAME} LINK_PUBLIC Framework RenderModules d3dcompiler ffx_backend_native ffx_fsr3_${FFX_PLATFORM_NAME} ffx_fsr3upscaler_${FFX_PLATFORM_NAME} ffx_frameinterpolation_${FFX_PLATFORM_NAME} ffx_opticalflow_${FFX_PLATFORM_NAME} ffx_fsr2_${FFX_PLATFORM_NAME} ffx_fsr1_${FFX_PLATFORM_NAME})
+target_link_libraries(${PROJECT_NAME} LINK_PUBLIC Framework RenderModules d3dcompiler ffx_backend_native ffx_dlss_${FFX_PLATFORM_NAME} ffx_fsr3_${FFX_PLATFORM_NAME} ffx_fsr3upscaler_${FFX_PLATFORM_NAME} ffx_frameinterpolation_${FFX_PLATFORM_NAME} ffx_opticalflow_${FFX_PLATFORM_NAME} ffx_fsr2_${FFX_PLATFORM_NAME} ffx_fsr1_${FFX_PLATFORM_NAME})
 endif()
 set_target_properties(${PROJECT_NAME} PROPERTIES
 						OUTPUT_NAME_DEBUGDX12 "${EXE_OUT_NAME}DX12D"
@@ -87,6 +87,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 # Add dependency information
 add_dependencies(${PROJECT_NAME} Framework)
 add_dependencies(${PROJECT_NAME} RenderModules)
+add_dependencies(${PROJECT_NAME} ffx_dlss_${FFX_PLATFORM_NAME})
 add_dependencies(${PROJECT_NAME} ffx_fsr3_${FFX_PLATFORM_NAME})
 add_dependencies(${PROJECT_NAME} ffx_fsr3upscaler_${FFX_PLATFORM_NAME})
 add_dependencies(${PROJECT_NAME} ffx_frameinterpolation_${FFX_PLATFORM_NAME})

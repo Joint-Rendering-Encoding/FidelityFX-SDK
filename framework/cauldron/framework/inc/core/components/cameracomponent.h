@@ -166,6 +166,16 @@ namespace cauldron
         const Vec3  GetCameraPos() const { return m_pOwner->GetTransform().getTranslation(); }
 
         /**
+         * @brief   Gets the camera's right vector.
+         */
+        const Vec4 GetRight() const { return m_InvViewMatrix.getCol0(); }
+
+        /**
+         * @brief   Gets the camera's up vector.
+         */
+        const Vec4 GetUp() const { return m_InvViewMatrix.getCol1(); }
+
+        /**
          * @brief   Gets the camera's direction.
          */
         const Vec4 GetDirection() const { return m_InvViewMatrix.getCol2(); }

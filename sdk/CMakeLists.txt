@@ -160,7 +160,6 @@ project (FidelityFX-SDK)
 # Components
 add_subdirectory(${FFX_COMPONENTS_PATH}/opticalflow)
 add_subdirectory(${FFX_COMPONENTS_PATH}/frameinterpolation)
-add_subdirectory(${FFX_COMPONENTS_PATH}/dlss)
 add_subdirectory(${FFX_COMPONENTS_PATH}/fsr3)
 add_subdirectory(${FFX_COMPONENTS_PATH}/fsr3upscaler)
 add_subdirectory(${FFX_COMPONENTS_PATH}/fsr2)

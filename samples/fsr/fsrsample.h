@@ -64,6 +64,7 @@ public:
 
     // Overrides
     virtual int32_t Init() override;
+    virtual void    Shutdown() override;
     virtual void    PostDeviceInit() override;
     virtual void    ParseSampleConfig() override;
     virtual void    RegisterSampleModules() override;

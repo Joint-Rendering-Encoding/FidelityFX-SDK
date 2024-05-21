@@ -92,6 +92,14 @@
                         "Mode": "Relay",
                         "RenderWidth": 1920,
                         "RenderHeight": 1080
+                    },
+                    "DLSSUpscaleRenderModule": {
+                        "mode": 2,
+                        "dlaaPreset": 0,
+                        "qualityPreset": 0,
+                        "balancedPreset": 0,
+                        "performancePreset": 0,
+                        "ultraPerformancePreset": 0
                     }
                 }
             }

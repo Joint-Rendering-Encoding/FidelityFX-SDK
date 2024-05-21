@@ -25,6 +25,10 @@
 #include "core/framework.h"
 #include "core/uimanager.h"
 
+#include <sl.h>
+#include <sl_consts.h>
+#include <sl_dlss.h>
+
 #include <functional>
 
 namespace cauldron
@@ -82,4 +86,18 @@ public:
 
 private:
     float m_UpscaleRatio = 2.f;
+
+    // DLSS 2 API Context
+    sl::DLSSOptions    m_DLSSOptions = {};
+    sl::FrameToken*    m_pFrameToken = nullptr;
+    sl::ViewportHandle m_Viewport    = {0};
+    uint32_t           m_JitterIndex = 0;
+    float              m_JitterX     = 0.f;
+    float              m_JitterY     = 0.f;
+
+    // DLSS 2 Resources
+    const cauldron::Texture* m_pTempColorTarget   = nullptr;
+    const cauldron::Texture* m_pColorTarget   = nullptr;
+    const cauldron::Texture* m_pDepthTarget   = nullptr;
+    const cauldron::Texture* m_pMotionVectors = nullptr;
 };

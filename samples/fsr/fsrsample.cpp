@@ -66,6 +66,19 @@ void FSRSample::PostDeviceInit()
         slSetD3DDevice(GetDevice()->GetImpl()->DX12Device());
 }
 
+void FSRSample::Shutdown()
+{
+    if (m_RemoteMode == RemoteMode::Relay)
+    {
+        // Cleanup
+        sl::Result res = slShutdown();
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to shutdown DLSS");
+    }
+
+    // Call the base class shutdown
+    Framework::Shutdown();
+}
+
 // Read in sample-specific configuration parameters.
 // Cauldron defaults may also be overridden at this point
 void FSRSample::ParseSampleConfig()

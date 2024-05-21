@@ -26,6 +26,7 @@
 #include <assert.h>
 #include <string>
 #include "sl_struct.h"
+#include "vectormath/vectormath.hpp"
 
 #define SL_ENUM_OPERATORS_64(T)                                                         \
 inline bool operator&(T a, T b)                                                         \
@@ -108,6 +109,13 @@ struct float3
 {
     float3() : x(INVALID_FLOAT), y(INVALID_FLOAT), z(INVALID_FLOAT) {}
     float3(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
+    float3& operator=(const math::Vector3& v)
+    {
+        x = v.getX();
+        y = v.getY();
+        z = v.getZ();
+        return *this;
+    }
     float x, y, z;
 };
 
@@ -115,6 +123,14 @@ struct float4
 {
     float4() : x(INVALID_FLOAT), y(INVALID_FLOAT), z(INVALID_FLOAT), w(INVALID_FLOAT) {}
     float4(float _x, float _y, float _z, float _w) : x(_x), y(_y), z(_z), w(_w) {}
+    float4& operator=(const math::Vector4& v)
+    {
+        x = v.getX();
+        y = v.getY();
+        z = v.getZ();
+        w = v.getW();
+        return *this;
+    }
     float x, y, z, w;
 };
 
@@ -125,6 +141,14 @@ struct float4x4
     inline const float4& operator[](uint32_t i) const { return row[i]; }
     inline void setRow(uint32_t i, const float4& v) { row[i] = v; }
     inline const float4& getRow(uint32_t i) { return row[i]; }
+    float4x4& operator=(const math::Matrix4& m)
+    {
+        row[0] = m.getRow(0);
+        row[1] = m.getRow(1);
+        row[2] = m.getRow(2);
+        row[3] = m.getRow(3);
+        return *this;
+    }
 
     //! Row major matrix
     float4 row[4];

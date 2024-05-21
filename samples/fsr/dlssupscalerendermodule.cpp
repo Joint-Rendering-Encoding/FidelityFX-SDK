@@ -22,14 +22,17 @@
 #include "dlssupscalerendermodule.h"
 #include "validation_remap.h"
 #include "render/swapchain.h"
+#include "render/profiler.h"
+#include "render/dynamicresourcepool.h"
+#include "core/scene.h"
 
-#include <sl.h>
-#include <sl_consts.h>
-#include <sl_dlss.h>
+// We use this header for jitter stuff
+#include <FidelityFX/host/ffx_fsr3.h>
 
 #include <functional>
 
 using namespace cauldron;
+using namespace math;
 
 void DLSSUpscaleRenderModule::Init(const json& initData)
 {
@@ -81,6 +84,35 @@ void DLSSUpscaleRenderModule::Init(const json& initData)
     if (requirements.flags & sl::FeatureRequirementFlags::eVSyncOffRequired)
         CauldronAssert(ASSERT_CRITICAL, !GetSwapChain()->IsVSyncEnabled(), L"DLSS requires VSync to be off");
 
+    // Set up DLSS
+    m_DLSSOptions.mode                   = initData["mode"].get<sl::DLSSMode>();
+    m_DLSSOptions.dlaaPreset             = initData["dlaaPreset"].get<sl::DLSSPreset>();
+    m_DLSSOptions.qualityPreset          = initData["qualityPreset"].get<sl::DLSSPreset>();
+    m_DLSSOptions.balancedPreset         = initData["balancedPreset"].get<sl::DLSSPreset>();
+    m_DLSSOptions.performancePreset      = initData["performancePreset"].get<sl::DLSSPreset>();
+    m_DLSSOptions.ultraPerformancePreset = initData["ultraPerformancePreset"].get<sl::DLSSPreset>();
+
+    // Fetch needed resources
+    m_pColorTarget   = GetFramework()->GetColorTargetForCallback(GetName());
+    m_pDepthTarget   = GetFramework()->GetRenderTexture(L"DepthTarget");
+    m_pMotionVectors = GetFramework()->GetRenderTexture(L"GBufferMotionVectorRT");
+
+    CauldronAssert(ASSERT_CRITICAL, m_pColorTarget, L"Could not get color target for FSR render modules");
+    CauldronAssert(ASSERT_CRITICAL, m_pDepthTarget, L"Could not get depth target for FSR render modules");
+    CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors, L"Could not get motion vectors for FSR render modules");
+
+    // Set up a temporary color target
+    TextureDesc           desc    = m_pColorTarget->GetDesc();
+    const ResolutionInfo& resInfo = GetFramework()->GetResolutionInfo();
+    desc.Width                    = resInfo.RenderWidth;
+    desc.Height                   = resInfo.RenderHeight;
+    desc.Name                     = L"DLSS_Copy_Color";
+    m_pTempColorTarget            = GetDynamicResourcePool()->CreateRenderTexture(
+        &desc, [](TextureDesc& desc, uint32_t displayWidth, uint32_t displayHeight, uint32_t renderingWidth, uint32_t renderingHeight) {
+            desc.Width  = renderingWidth;
+            desc.Height = renderingHeight;
+        });
+
     // Start disabled as this will be enabled externally
     SetModuleEnabled(false);
 
@@ -92,17 +124,170 @@ DLSSUpscaleRenderModule::~DLSSUpscaleRenderModule()
 {
     // Protection
     if (ModuleEnabled())
-        EnableModule(false);  // Destroy DLSS context
+        EnableModule(false);
 }
 
 void DLSSUpscaleRenderModule::EnableModule(bool enabled)
 {
+    if (enabled)
+    {
+        GetFramework()->EnableUpscaling(true);
+
+        // Set the jitter callback to use
+        CameraJitterCallback jitterCallback = [this](Vec2& values) {
+            // Increment jitter index for frame
+            ++m_JitterIndex;
+
+            // Update FSR3 jitter for built in TAA
+            const ResolutionInfo& resInfo          = GetFramework()->GetResolutionInfo();
+            const int32_t         jitterPhaseCount = ffxFsr3GetJitterPhaseCount(resInfo.RenderWidth, resInfo.DisplayWidth);
+            ffxFsr3GetJitterOffset(&m_JitterX, &m_JitterY, m_JitterIndex, jitterPhaseCount);
+
+            values = Vec2(-2.f * m_JitterX / resInfo.RenderWidth, 2.f * m_JitterY / resInfo.RenderHeight);
+        };
+        CameraComponent::SetJitterCallbackFunc(jitterCallback);
+    }
+    else
+    {
+        GetFramework()->EnableUpscaling(false);
+
+        // Reset jitter callback
+        CameraComponent::SetJitterCallbackFunc(nullptr);
+    }
+
+    SetModuleEnabled(enabled);
 }
 
 void DLSSUpscaleRenderModule::OnResize(const ResolutionInfo& resInfo)
 {
+    if (!ModuleEnabled())
+        return;
 }
 
 void DLSSUpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 {
+    GPUScopedProfileCapture sampleMarker(pCmdList, L"DLSS2");
+    sl::Result              res = sl::Result::eOk;
+    const ResolutionInfo&   resInfo = GetFramework()->GetResolutionInfo();
+    CameraComponent*        pCamera = GetScene()->GetCurrentCamera();
+    sl::Extent              renderExtent = {0, 0, resInfo.RenderWidth, resInfo.RenderHeight};
+    sl::Extent              fullExtent = {0, 0, resInfo.DisplayWidth, resInfo.DisplayHeight};
+
+    // Copy color target to temporary target
+    std::vector<Barrier> barriers;
+    barriers.push_back(Barrier::Transition(
+        m_pTempColorTarget->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopyDest));
+    barriers.push_back(Barrier::Transition(
+        m_pColorTarget->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopySource));
+    ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
+
+    TextureCopyDesc desc(m_pColorTarget->GetResource(), m_pTempColorTarget->GetResource());
+    CopyTextureRegion(pCmdList, &desc);
+
+    barriers[0] = Barrier::Transition(
+        m_pTempColorTarget->GetResource(), ResourceState::CopyDest, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource);
+    barriers[1] = Barrier::Transition(
+        m_pColorTarget->GetResource(), ResourceState::CopySource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource);
+    ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
+
+    // Transition color target for unordered access
+    barriers.clear();
+    barriers.push_back(Barrier::Transition(
+        m_pColorTarget->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::UnorderedAccess));
+    ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
+
+    // Tag required resources
+    sl::Resource colorIn = {sl::ResourceType::eTex2d,
+                             (void*)m_pTempColorTarget->GetResource()->GetImpl()->DX12Resource(),
+                             nullptr,
+                             nullptr,
+                             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};
+    sl::Resource colorOut = {sl::ResourceType::eTex2d,
+                             (void*)m_pColorTarget->GetResource()->GetImpl()->DX12Resource(),
+                             nullptr,
+                             nullptr, D3D12_RESOURCE_STATE_UNORDERED_ACCESS};
+    sl::Resource depth    = {sl::ResourceType::eTex2d,
+                             (void*)m_pDepthTarget->GetResource()->GetImpl()->DX12Resource(),
+                             nullptr,
+                             nullptr,
+                             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};
+    sl::Resource mvec     = {sl::ResourceType::eTex2d,
+                             (void*)m_pMotionVectors->GetResource()->GetImpl()->DX12Resource(),
+                             nullptr,
+                             nullptr,
+                             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};
+
+    sl::ResourceTag colorInTag  = sl::ResourceTag{&colorIn, sl::kBufferTypeScalingInputColor, sl::ResourceLifecycle::eOnlyValidNow, &renderExtent};
+    sl::ResourceTag colorOutTag = sl::ResourceTag{&colorOut, sl::kBufferTypeScalingOutputColor, sl::ResourceLifecycle::eOnlyValidNow, &fullExtent};
+    sl::ResourceTag depthTag    = sl::ResourceTag{&depth, sl::kBufferTypeDepth, sl::ResourceLifecycle::eOnlyValidNow, &renderExtent};
+    sl::ResourceTag mvecTag     = sl::ResourceTag{&mvec, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eOnlyValidNow, &renderExtent};
+
+    sl::ResourceTag tags[] = {colorInTag, colorOutTag, depthTag, mvecTag};
+    res                    = slSetTag(m_Viewport, tags, _countof(tags), pCmdList->GetImpl()->DX12CmdList());
+    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS tags (%d)", res);
+
+    // Set DLSS options
+    m_DLSSOptions.outputWidth           = resInfo.DisplayWidth;
+    m_DLSSOptions.outputHeight          = resInfo.DisplayHeight;
+    m_DLSSOptions.useAutoExposure       = sl::eTrue;
+    m_DLSSOptions.colorBuffersHDR       = sl::eTrue;
+    m_DLSSOptions.alphaUpscalingEnabled = sl::eFalse;
+    res                                 = slDLSSSetOptions(m_Viewport, m_DLSSOptions);
+    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS options (%d)", res);
+
+    // Get a new frame token
+    slGetNewFrameToken(m_pFrameToken);
+
+    // Provide common constants
+    sl::Constants constants{};
+    constants.mvecScale              = {1.0f / resInfo.RenderWidth, 1.0f / resInfo.RenderHeight};
+    constants.jitterOffset           = {-m_JitterX, -m_JitterY};
+    constants.depthInverted          = GetConfig()->InvertedDepth ? sl::Boolean::eTrue : sl::Boolean::eFalse;
+    constants.cameraPinholeOffset    = {0.0f, 0.0f};
+    constants.reset                  = sl::Boolean::eFalse;
+    constants.motionVectors3D        = sl::Boolean::eFalse;
+    constants.orthographicProjection = sl::Boolean::eFalse;
+    constants.motionVectorsDilated   = sl::Boolean::eFalse;
+    constants.motionVectorsJittered  = sl::Boolean::eFalse;
+
+    // Camera constants
+    constants.cameraViewToClip = pCamera->GetViewProjection();
+    constants.clipToCameraView = pCamera->GetInverseViewProjection();
+    constants.clipToPrevClip   = pCamera->GetPreviousViewProjection();
+    constants.prevClipToClip   = inverse(pCamera->GetPreviousViewProjection());
+
+    // Camera position and direction
+    constants.cameraPos   = pCamera->GetCameraPos();
+    constants.cameraUp    = pCamera->GetUp().getXYZ();
+    constants.cameraRight = pCamera->GetRight().getXYZ();
+    constants.cameraFwd   = pCamera->GetDirection().getXYZ();
+
+    // Camera planes
+    constants.cameraNear = pCamera->GetNearPlane();
+    constants.cameraFar  = pCamera->GetFarPlane();
+    constants.cameraFOV  = pCamera->GetFovY();
+
+    // Rest of the camera constants
+    constants.cameraAspectRatio    = resInfo.GetDisplayAspectRatio();
+    constants.cameraMotionIncluded = sl::Boolean::eTrue;
+
+    res = slSetConstants(constants, *m_pFrameToken, m_Viewport);
+    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS constants (%d)", res);
+
+    // Evaluate DLSS
+    const sl::BaseStructure* inputs[] = {&m_Viewport};
+
+    res = slEvaluateFeature(sl::kFeatureDLSS, *m_pFrameToken, inputs, _countof(inputs), pCmdList->GetImpl()->DX12CmdList());
+    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to evaluate DLSS (%d)", res);
+
+    // Transition color target back to pixel shader resource
+    barriers.clear();
+    barriers.push_back(Barrier::Transition(
+        m_pColorTarget->GetResource(), ResourceState::UnorderedAccess, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
+    ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
+
+    SetAllResourceViewHeaps(pCmdList);
+
+    // We are now done with upscaling
+    GetFramework()->SetUpscalingState(UpscalerState::PostUpscale);
 }

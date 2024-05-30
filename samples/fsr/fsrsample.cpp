@@ -48,7 +48,7 @@ int32_t FSRSample::Init()
     {
         // Initialize Streamline SDK
         sl::Preferences pref{};
-        sl::Feature     features[] = {sl::kFeatureDLSS};
+        sl::Feature     features[] = {sl::kFeatureDLSS, sl::kFeatureDLSS_G, sl::kFeatureReflex};
         pref.featuresToLoad        = features;
         pref.numFeaturesToLoad     = _countof(features);
 

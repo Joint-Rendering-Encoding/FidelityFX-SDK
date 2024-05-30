@@ -6,8 +6,6 @@ import time
 import signal
 import argparse
 import subprocess
-import psutil
-import pynvml
 
 __doc__ = """
 This script is used to run FSR tests. It starts the renderer and relay processes
@@ -131,36 +129,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_gpu_metrics():
-    # Get the handle of the GPU you want to query
-    handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-
-    # Get GPU information
-    memory_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-    utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
-    power_usage = pynvml.nvmlDeviceGetPowerUsage(handle)
-    clock_speed = pynvml.nvmlDeviceGetClockInfo(handle, 0)
-
-    return {
-        "memory": {
-            "total": memory_info.total / (1024 * 1024),  # MB
-            "used": memory_info.used / (1024 * 1024),  # MB
-            "free": memory_info.free / (1024 * 1024),  # MB
-        },
-        "utilization": {
-            "gpu": utilization.gpu / 100,  # %
-            "memory": utilization.memory / 100,  # %
-        },
-        "power": power_usage / 1000,  # W
-        "clock_speed": clock_speed,  # MHz
-    }
-
-
 if __name__ == "__main__":
     args = parse_args()
-
-    # Initialize NVML
-    pynvml.nvmlInit()
 
     # Create the renderer process
     renderer_config = get_config(
@@ -197,7 +167,6 @@ if __name__ == "__main__":
     # Register signal handlers
     def cleanup(sig, frame):
         print("Cleaning up...")
-        pynvml.nvmlShutdown()
         renderer.kill()
         if not args.skip_relay:
             relay.kill()
@@ -206,52 +175,23 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
-    # Collect live metrics
-    renderer_process = psutil.Process(renderer.pid)
-    if not args.skip_relay:
-        relay_process = psutil.Process(relay.pid)
-
-    def get_metrics_for(process):
-        return {
-            "cpu": {
-                "times": {
-                    "user": process.cpu_times().user,  # s
-                    "system": process.cpu_times().system,  # s
-                },
-                "percent": process.cpu_percent(),  # Not accurate, single core %
-            },
-            "mem": {
-                "rss": {
-                    "percent": process.memory_percent(memtype="rss"),  # Not accurate, %
-                    "value": process.memory_info().rss / (1024 * 1024),  # MB
-                },
-                "vms": {
-                    "percent": process.memory_percent(memtype="vms"),  # Not accurate, %
-                    "value": process.memory_info().vms / (1024 * 1024),  # MB
-                },
-            },
-        }
-
-    samples = []
+    dots = 0
     while True:
-        try:
-            sample = {
-                "renderer": get_metrics_for(renderer_process),
-                **(
-                    {"relay": get_metrics_for(relay_process)}
-                    if not args.skip_relay
-                    else {}
-                ),
-                "gpu": get_gpu_metrics(),
-            }
-
-            print(json.dumps(sample, indent=4))
-            samples.append(sample)
-        except Exception as e:
-            print(f"Error: {e}")
+        # Check if the renderer is still running
+        if renderer.poll() is not None:
             break
-        finally:
-            time.sleep(1)
 
-    # Clean up the processes
+        # Check if the relay is still running
+        if not args.skip_relay and relay.poll() is not None:
+            break
+
+        print(
+            f"Waiting for process(es) to finish{'.' * dots + ' ' * (4 - dots)}",
+            end="\r",
+        )
+        time.sleep(0.5)
+        dots = (dots + 1) % 4
+
+    print()
+    print("Process(es) finished")
     cleanup(None, None)

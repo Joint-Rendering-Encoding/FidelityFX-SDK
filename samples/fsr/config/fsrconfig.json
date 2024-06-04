@@ -65,6 +65,7 @@
                     "FSR3UpscaleRenderModule",
                     "FSR3RenderModule",
                     "DLSSUpscaleRenderModule",
+                    "DLSSRenderModule",
                     "UpscaleRenderModule",
                     "ToneMappingRenderModule",
                     "FSR1RenderModule"
@@ -100,6 +101,9 @@
                         "balancedPreset": 0,
                         "performancePreset": 0,
                         "ultraPerformancePreset": 0
+                    },
+                    "DLSSRenderModule": {
+                        "mode": 1
                     }
                 }
             }

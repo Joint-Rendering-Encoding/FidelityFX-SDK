@@ -97,9 +97,9 @@ void DLSSUpscaleRenderModule::Init(const json& initData)
     m_pDepthTarget   = GetFramework()->GetRenderTexture(L"DepthTarget");
     m_pMotionVectors = GetFramework()->GetRenderTexture(L"GBufferMotionVectorRT");
 
-    CauldronAssert(ASSERT_CRITICAL, m_pColorTarget, L"Could not get color target for FSR render modules");
-    CauldronAssert(ASSERT_CRITICAL, m_pDepthTarget, L"Could not get depth target for FSR render modules");
-    CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors, L"Could not get motion vectors for FSR render modules");
+    CauldronAssert(ASSERT_CRITICAL, m_pColorTarget, L"Could not get color target for DLSSUpscale render modules");
+    CauldronAssert(ASSERT_CRITICAL, m_pDepthTarget, L"Could not get depth target for DLSSUpscale render modules");
+    CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors, L"Could not get motion vectors for DLSSUpscale render modules");
 
     // Set up a temporary color target
     TextureDesc           desc    = m_pColorTarget->GetDesc();
@@ -217,10 +217,10 @@ void DLSSUpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
                              nullptr,
                              D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};
 
-    sl::ResourceTag colorInTag  = sl::ResourceTag{&colorIn, sl::kBufferTypeScalingInputColor, sl::ResourceLifecycle::eOnlyValidNow, &renderExtent};
+    sl::ResourceTag colorInTag  = sl::ResourceTag{&colorIn, sl::kBufferTypeScalingInputColor, sl::ResourceLifecycle::eValidUntilPresent, &renderExtent};
     sl::ResourceTag colorOutTag = sl::ResourceTag{&colorOut, sl::kBufferTypeScalingOutputColor, sl::ResourceLifecycle::eOnlyValidNow, &fullExtent};
-    sl::ResourceTag depthTag    = sl::ResourceTag{&depth, sl::kBufferTypeDepth, sl::ResourceLifecycle::eOnlyValidNow, &renderExtent};
-    sl::ResourceTag mvecTag     = sl::ResourceTag{&mvec, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eOnlyValidNow, &renderExtent};
+    sl::ResourceTag depthTag    = sl::ResourceTag{&depth, sl::kBufferTypeDepth, sl::ResourceLifecycle::eValidUntilPresent, &renderExtent};
+    sl::ResourceTag mvecTag     = sl::ResourceTag{&mvec, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eValidUntilPresent, &renderExtent};
 
     sl::ResourceTag tags[] = {colorInTag, colorOutTag, depthTag, mvecTag};
     res                    = slSetTag(m_Viewport, tags, _countof(tags), pCmdList->GetImpl()->DX12CmdList());

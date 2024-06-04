@@ -23,6 +23,7 @@
 
 #include "core/framework.h"
 
+class DLSSRenderModule;
 class DLSSUpscaleRenderModule;
 class FSRRemoteRenderModule;
 class FSR3RenderModule;
@@ -85,6 +86,7 @@ private:
         FSR3UPSCALEONLY,
         FSR3,
         DLSSUPSCALEONLY,
+        DLSS,
 
         Count
     };
@@ -104,6 +106,7 @@ private:
     UpscaleMethod           m_UIMethod         = UpscaleMethod::Native;
     cauldron::RenderModule* m_pCurrentUpscaler = nullptr;
 
+    DLSSRenderModule*         m_pDLSSRenderModule        = nullptr;
     DLSSUpscaleRenderModule*  m_pDLSSUpscaleRenderModule = nullptr;
     FSRRemoteRenderModule*    m_pFSRRemoteRenderModule   = nullptr;
     FSR3RenderModule*         m_pFSR3RenderModule        = nullptr;

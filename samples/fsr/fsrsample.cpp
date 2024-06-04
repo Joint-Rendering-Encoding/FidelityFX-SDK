@@ -25,6 +25,7 @@
 #include "fsr3rendermodule.h"
 #include "fsrremoterendermodule.h"
 #include "dlssupscalerendermodule.h"
+#include "dlssrendermodule.h"
 #include "upscalerendermodule.h"
 #include "fsr1rendermodule.h"
 #include "upscalerendermodule.h"
@@ -48,7 +49,7 @@ int32_t FSRSample::Init()
     {
         // Initialize Streamline SDK
         sl::Preferences pref{};
-        sl::Feature     features[] = {sl::kFeatureDLSS, sl::kFeatureDLSS_G, sl::kFeatureReflex};
+        sl::Feature     features[] = {sl::kFeatureDLSS, sl::kFeatureDLSS_G, sl::kFeatureReflex, sl::kFeaturePCL};
         pref.featuresToLoad        = features;
         pref.numFeaturesToLoad     = _countof(features);
 
@@ -131,6 +132,7 @@ void FSRSample::RegisterSampleModules()
     else
     {
         // Register the upscaler render modules
+        RenderModuleFactory::RegisterModule<DLSSRenderModule>("DLSSRenderModule");
         RenderModuleFactory::RegisterModule<DLSSUpscaleRenderModule>("DLSSUpscaleRenderModule");
         RenderModuleFactory::RegisterModule<FSR3RenderModule>("FSR3RenderModule");
         RenderModuleFactory::RegisterModule<FSR3UpscaleRenderModule>("FSR3UpscaleRenderModule");
@@ -155,6 +157,7 @@ int32_t FSRSample::DoSampleInit()
         return 0;
 
     // Store pointers to various render modules
+    m_pDLSSRenderModule        = static_cast<DLSSRenderModule*>(GetFramework()->GetRenderModule("DLSSRenderModule"));
     m_pDLSSUpscaleRenderModule = static_cast<DLSSUpscaleRenderModule*>(GetFramework()->GetRenderModule("DLSSUpscaleRenderModule"));
     m_pFSR2RenderModule        = static_cast<FSR2RenderModule*>(GetFramework()->GetRenderModule("FSR2RenderModule"));
     m_pFSR3UpscaleRenderModule = static_cast<FSR3UpscaleRenderModule*>(GetFramework()->GetRenderModule("FSR3UpscaleRenderModule"));
@@ -167,6 +170,8 @@ int32_t FSRSample::DoSampleInit()
 
     m_pTAARenderModule->EnableModule(false);
 
+    // Check if all render modules are found
+    CauldronAssert(ASSERT_CRITICAL, m_pDLSSRenderModule, L"FidelityFX FSR Sample: Error: Could not find DLSS render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pDLSSUpscaleRenderModule, L"FidelityFX FSR Sample: Error: Could not find DLSSUpscale render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pFSR3RenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR3 render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pFSR3UpscaleRenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR3Upscale render module.");
@@ -204,7 +209,7 @@ int32_t FSRSample::DoSampleInit()
 
 #ifdef FFX_API_DX12
     // Setup upscale method options
-    const char*              upscalers[] = {"Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2", "FSR3Upscale", "FSR3", "DLSSUpscale"};
+    const char*              upscalers[] = {"Native", "Point", "Bilinear", "Bicubic", "FSR1", "FSR2", "FSR3Upscale", "FSR3", "DLSSUpscale", "DLSS"};
     std::vector<std::string> comboOptions;
     comboOptions.assign(upscalers, upscalers + _countof(upscalers));
 
@@ -244,6 +249,10 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
     if (pOldUpscaler)
         pOldUpscaler->EnableModule(false);
 
+    // If DLSS (FG) was enabled, also disable the DLSS render module
+    if (oldUpscaler == UpscaleMethod::DLSS)
+        m_pDLSSRenderModule->EnableModule(false);
+
     // Render UI to separate target for FSR3
     UIRenderModule* uimod = static_cast<UIRenderModule*>(GetFramework()->GetRenderModule("UIRenderModule"));
     uimod->SetAsyncRender(m_Method == UpscaleMethod::FSR3);
@@ -273,6 +282,7 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
         m_pCurrentUpscaler                = m_pFSR3RenderModule;
         m_pFSR3RenderModule->m_NeedReInit = false;
         break;
+    case UpscaleMethod::DLSS:
     case UpscaleMethod::DLSSUPSCALEONLY:
         m_pCurrentUpscaler = m_pDLSSUpscaleRenderModule;
         break;
@@ -284,6 +294,10 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
     // Enable the new one
     if (m_pCurrentUpscaler)
         m_pCurrentUpscaler->EnableModule(true);
+
+    // If DLSS (FG) was enabled, also enable the DLSS render module
+    if (m_Method == UpscaleMethod::DLSS)
+        m_pDLSSRenderModule->EnableModule(true);
 }
 
 void FSRSample::DoSampleUpdates(double deltaTime)

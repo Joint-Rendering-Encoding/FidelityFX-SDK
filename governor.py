@@ -7,6 +7,12 @@ import signal
 import argparse
 import subprocess
 
+# Windows specific imports
+import win32gui
+import win32process
+import win32con
+import ctypes
+
 __doc__ = """
 This script is used to run FSR tests. It starts the renderer and relay processes
 and collects metrics from them and the GPU. The metrics are then printed to the
@@ -26,6 +32,7 @@ UPSCALERS = [
     "FSR3Upscale",
     "FSR3",
     "DLSSUpscale",
+    "DLSS",
 ]
 
 # Get the default configf
@@ -129,6 +136,19 @@ def parse_args():
     return parser.parse_args()
 
 
+def set_focus_by_pid(pid):
+    def enum_windows_callback(hwnd, pid):
+        if win32gui.IsWindowVisible(hwnd) and win32gui.IsWindowEnabled(hwnd):
+            _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
+            title = win32gui.GetWindowText(hwnd)
+            if found_pid == pid and title == "FidelityFX FSR":
+                ctypes.windll.user32.SetForegroundWindow(hwnd)
+                ctypes.windll.user32.ShowWindow(hwnd, win32con.SW_RESTORE)
+                return True
+
+    win32gui.EnumWindows(enum_windows_callback, pid)
+
+
 if __name__ == "__main__":
     args = parse_args()
 
@@ -174,6 +194,11 @@ if __name__ == "__main__":
 
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
+
+    # Set focus to the relay
+    if not args.skip_relay:
+        time.sleep(2)
+        set_focus_by_pid(relay.pid)
 
     dots = 0
     while True:

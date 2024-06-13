@@ -39,12 +39,12 @@ public:
     virtual ~FSRRemoteRenderModule();
 
     /**
-     * @brief   Initialize FSR Remote API Context, create resources, and setup UI section for FSR 1.
+     * @brief   Initialize FSR Remote API Context, create resources, and setup UI section for FSR Remote.
      */
     void Init(const json& initData) override;
 
     /**
-     * @brief   Setup parameters that the FSR Remote API needs this frame and then send the resources to the relay server.
+     * @brief   Setup parameters that the FSR Remote API needs this frame and then send the resources to the upscaler process.
      */
     void Execute(double deltaTime, cauldron::CommandList* pCmdList) override;
 
@@ -59,8 +59,9 @@ private:
     uint32_t m_RenderHeight = 1440;
 
     // FSR Remote variables
-    bool           m_RelayMode   = false;
-    int            m_BufferIndex = 0;
+    bool m_UpscalerModeEnabled = false;
+    bool m_OnlyResizing        = false;
+    int  m_BufferIndex         = 0;
 
     // DX12Ops
     std::unique_ptr<DX12Ops> m_DX12Ops;
@@ -70,14 +71,12 @@ private:
     void InboundDataTransfer(double deltaTime, cauldron::CommandList* pCmdList);
 
     // FidelityFX Super Resolution resources
-    const cauldron::Texture* m_pColorTarget     = nullptr;
-    const cauldron::Texture* m_pDepthTarget     = nullptr;
-    const cauldron::Texture* m_pMotionVectors   = nullptr;
+    const cauldron::Texture* m_pColorTarget   = nullptr;
+    const cauldron::Texture* m_pDepthTarget   = nullptr;
+    const cauldron::Texture* m_pMotionVectors = nullptr;
 
     FSRResources getFSRResources() const
     {
-        return {m_pColorTarget->GetResource(),
-                m_pDepthTarget->GetResource(),
-                m_pMotionVectors->GetResource()};
+        return {m_pColorTarget->GetResource(), m_pDepthTarget->GetResource(), m_pMotionVectors->GetResource()};
     }
 };

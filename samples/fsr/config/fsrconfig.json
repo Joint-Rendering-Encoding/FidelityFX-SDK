@@ -42,9 +42,30 @@
         "Remote": {
             "Mode": "Renderer",
             "StartupConfiguration": {
-                "Upscaler": 7
+                "Upscaler": 7,
+                "RenderWidth": 1920,
+                "RenderHeight": 1080
             },
             "RenderModules": {
+                "Default": [
+                    "SkyDomeRenderModule",
+                    "RasterShadowRenderModule",
+                    "GBufferRenderModule",
+                    "LightingRenderModule",
+                    "AnimatedTexturesRenderModule",
+                    "TranslucencyRenderModule",
+                    "GPUParticleRenderModule",
+                    "TAARenderModule",
+                    "FSR2RenderModule",
+                    "FSR3UpscaleRenderModule",
+                    "FSR3RenderModule",
+                    "DLSSUpscaleRenderModule",
+                    "DLSSRenderModule",
+                    "UpscaleRenderModule",
+                    "ToneMappingRenderModule",
+                    "FSR1RenderModule",
+                    "FSRRemoteRenderModule"
+                ],
                 "Renderer": [
                     "SkyDomeRenderModule",
                     "RasterShadowRenderModule",
@@ -56,7 +77,7 @@
                     "ToneMappingRenderModule",
                     "FSRRemoteRenderModule"
                 ],
-                "Relay": [
+                "Upscaler": [
                     "GBufferRenderModule",
                     "FSRRemoteRenderModule",
                     "TranslucencyRenderModule",
@@ -72,27 +93,36 @@
                 ]
             },
             "RenderModuleOverrides": {
-                "Renderer": {
+                "Default": {
                     "ToneMappingRenderModule": {
-                        "ToneMapper": 5
+                        "ToneMapper": 0
                     },
-                    "FSRRemoteRenderModule": {
-                        "Mode": "Renderer",
-                        "RenderWidth": 1920,
-                        "RenderHeight": 1080
+                    "DLSSUpscaleRenderModule": {
+                        "mode": 2,
+                        "dlaaPreset": 0,
+                        "qualityPreset": 0,
+                        "balancedPreset": 0,
+                        "performancePreset": 0,
+                        "ultraPerformancePreset": 0
+                    },
+                    "DLSSRenderModule": {
+                        "mode": 1
                     },
                     "SkyDomeRenderModule": {
                         "Procedural": true
                     }
                 },
-                "Relay": {
+                "Renderer": {
+                    "ToneMappingRenderModule": {
+                        "ToneMapper": 5
+                    },
+                    "SkyDomeRenderModule": {
+                        "Procedural": true
+                    }
+                },
+                "Upscaler": {
                     "ToneMappingRenderModule": {
                         "ToneMapper": 0
-                    },
-                    "FSRRemoteRenderModule": {
-                        "Mode": "Relay",
-                        "RenderWidth": 1920,
-                        "RenderHeight": 1080
                     },
                     "DLSSUpscaleRenderModule": {
                         "mode": 2,

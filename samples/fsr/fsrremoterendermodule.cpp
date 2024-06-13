@@ -16,20 +16,24 @@ void FSRRemoteRenderModule::Init(const json& initData)
     //////////////////////////////////////////////////////////////////////////
     // Resource setup
 
-    // Fetch needed resources
-    m_pColorTarget     = GetFramework()->GetColorTargetForCallback(GetName());
-    m_pDepthTarget     = GetFramework()->GetRenderTexture(L"DepthTarget");
-    m_pMotionVectors   = GetFramework()->GetRenderTexture(L"GBufferMotionVectorRT");
-
-    CauldronAssert(ASSERT_CRITICAL, m_pColorTarget, L"Could not get color target for FSR render modules");
-    CauldronAssert(ASSERT_CRITICAL, m_pDepthTarget, L"Could not get depth target for FSR render modules");
-    CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors, L"Could not get motion vectors for FSR render modules");
-
     // Check remote mode
-    m_RelayMode = initData.value("Mode", "Renderer") == "Relay";
+    m_UpscalerModeEnabled = initData.value("Mode", "Renderer") == "Upscaler";
+    m_OnlyResizing        = initData.value("Mode", "Renderer") == "Default";
 
-    // Relay mode is first in line by RenderModules order, but Renderer mode needs to be put in before SwapChainRenderModule explicitly
-    if (!m_RelayMode)
+    // Fetch needed resources
+    if (!m_OnlyResizing)
+    {
+        m_pColorTarget   = GetFramework()->GetColorTargetForCallback(GetName());
+        m_pDepthTarget   = GetFramework()->GetRenderTexture(L"DepthTarget");
+        m_pMotionVectors = GetFramework()->GetRenderTexture(L"GBufferMotionVectorRT");
+
+        CauldronAssert(ASSERT_CRITICAL, m_pColorTarget, L"Could not get color target for FSR render modules");
+        CauldronAssert(ASSERT_CRITICAL, m_pDepthTarget, L"Could not get depth target for FSR render modules");
+        CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors, L"Could not get motion vectors for FSR render modules");
+    }
+
+    // Upscaler mode is first in line by RenderModules order, but Renderer mode needs to be put in before SwapChainRenderModule explicitly
+    if (!m_UpscalerModeEnabled && !m_OnlyResizing)
     {
         // Register the outbound data transfer callback
         ExecuteCallback callbackPreSwap      = std::bind(&FSRRemoteRenderModule::OutboundDataTransfer, this, std::placeholders::_1, std::placeholders::_2);
@@ -37,24 +41,27 @@ void FSRRemoteRenderModule::Init(const json& initData)
         GetFramework()->RegisterExecutionCallback(L"SwapChainRenderModule", true, callbackPreSwapTuple);
     }
 
-    // Create DX12Ops
-    m_DX12Ops = std::make_unique<DX12Ops>();
+    if (!m_OnlyResizing)
+    {
+        // Create DX12Ops
+        m_DX12Ops = std::make_unique<DX12Ops>();
 
-    // Intialize the shared buffers
-    m_DX12Ops->CreateSharedBuffers(getFSRResources(), !m_RelayMode);
+        // Intialize the shared buffers
+        m_DX12Ops->CreateSharedBuffers(getFSRResources(), !m_UpscalerModeEnabled);
 
-    // The framework will run MainLoop based on the outcome of this function
-    GetFramework()->SetReadyFunction([this]() {
-        if (!m_RelayMode)
-            return m_DX12Ops->hasBufferWithState(DX12Ops::BufferState::IDLE);
-        else
-            return m_DX12Ops->hasBufferWithState(DX12Ops::BufferState::READY);
-    });
+        // The framework will run MainLoop based on the outcome of this function
+        GetFramework()->SetReadyFunction([this]() {
+            if (!m_UpscalerModeEnabled)
+                return m_DX12Ops->hasBufferWithState(DX12Ops::BufferState::IDLE);
+            else
+                return m_DX12Ops->hasBufferWithState(DX12Ops::BufferState::READY);
+        });
+    }
 
     // On Renderer, enable upscaling
     m_RenderWidth  = initData.value("RenderWidth", 2560);
     m_RenderHeight = initData.value("RenderHeight", 1440);
-    if (!m_RelayMode)
+    if (!m_UpscalerModeEnabled || m_OnlyResizing)
     {
         GetFramework()->EnableUpscaling(true, [&](uint32_t displayWidth, uint32_t displayHeight) {
             return ResolutionInfo{
@@ -95,8 +102,12 @@ void FSRRemoteRenderModule::OnResize(const ResolutionInfo& resInfo)
 
 void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 {
-    // Since this render module is always first in relay mode, we can proceed with the data transfer
-    if (m_RelayMode)
+    // Skip if we are in only resizing mode
+    if (m_OnlyResizing)
+        return;
+
+    // Since this render module is always first in upscaler mode, we can proceed with the data transfer
+    if (m_UpscalerModeEnabled)
         return InboundDataTransfer(deltaTime, pCmdList);
 
     // Workaround to supress warnings from the framework

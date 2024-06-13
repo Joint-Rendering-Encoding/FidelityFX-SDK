@@ -46,6 +46,14 @@ class cauldron::RenderModule;
 /// @ingroup FfxFsrSample
 /// @{
 
+enum class OperationMode
+{
+    Renderer = 1,
+    Upscaler,
+    Default
+};
+DEFINE_ENUM_FLAG_OPERATORS(OperationMode);
+
 /**
  * @class FSRSample
  *
@@ -91,15 +99,9 @@ private:
         Count
     };
 
-    enum class RemoteMode : uint32_t
-    {
-        Renderer = 0,
-        Relay
-    };
-
     void SwitchUpscaler(UpscaleMethod newUpscaler);
 
-    RemoteMode m_RemoteMode = RemoteMode::Renderer;
+    OperationMode m_OperationMode = OperationMode::Renderer;
 
     bool                    m_UpscalingOnStart = false;
     UpscaleMethod           m_Method           = UpscaleMethod::Native;

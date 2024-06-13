@@ -14,7 +14,7 @@ import win32con
 import ctypes
 
 __doc__ = """
-This script is used to run FSR tests. It starts the renderer and relay processes
+This script is used to run FSR tests. It starts the renderer and upscaler processes
 and collects metrics from them and the GPU. The metrics are then printed to the
 console in JSON format.
 """
@@ -52,17 +52,6 @@ def get_config(
 
     # Apply mode specific settings
     tmp["FidelityFX FSR"]["Remote"]["Mode"] = mode
-    if mode == "Relay":
-        tmp["FidelityFX FSR"]["FPSLimiter"]["UseGPULimiter"] = False
-
-    # Apply resolution settings
-    tmp["FidelityFX FSR"]["Remote"]["RenderModuleOverrides"][mode][
-        "FSRRemoteRenderModule"
-    ] = {
-        "Mode": mode,
-        "RenderWidth": render_res[0],
-        "RenderHeight": render_res[1],
-    }
 
     # Apply present resolution settings
     tmp["FidelityFX FSR"]["Presentation"]["Width"] = present_res[0]
@@ -83,9 +72,11 @@ def get_config(
         raise ValueError("Invalid scene")
 
     # Apply upscaler settings
-    tmp["FidelityFX FSR"]["Remote"]["StartupConfiguration"]["Upscaler"] = (
-        UPSCALERS.index(upscaler)
-    )
+    tmp["FidelityFX FSR"]["Remote"]["StartupConfiguration"] = {
+        "Upscaler": UPSCALERS.index(upscaler),
+        "RenderWidth": render_res[0],
+        "RenderHeight": render_res[1],
+    }
 
     return tmp
 
@@ -128,10 +119,16 @@ def parse_args():
         help="Upscaler to use",
     )
     parser.add_argument(
-        "--skip-relay",
+        "--skip-upscaler",
         action="store_true",
         default=False,
-        help="Skip the relay process",
+        help="Skip the upscaler process",
+    )
+    parser.add_argument(
+        "--use-default",
+        action="store_true",
+        default=False,
+        help="Use the default config, without decoupling the upscaler",
     )
     return parser.parse_args()
 
@@ -153,8 +150,9 @@ if __name__ == "__main__":
     args = parse_args()
 
     # Create the renderer process
+    mode = "Default" if args.use_default else "Renderer"
     renderer_config = get_config(
-        "Renderer", args.render_res, args.present_res, args.scene, args.upscaler
+        mode, args.render_res, args.present_res, args.scene, args.upscaler
     )
     apply_config(renderer_config)
     renderer = subprocess.Popen(
@@ -166,39 +164,47 @@ if __name__ == "__main__":
     )
     print(f"Renderer PID: {renderer.pid}")
 
-    # Wait until the renderer is ready
-    time.sleep(2)
+    # Default mode implies skipping the upscaler
+    if args.use_default:
+        args.skip_upscaler = True
 
-    # Create the relay process
-    relay_config = get_config(
-        "Relay", args.render_res, args.present_res, args.scene, args.upscaler
-    )
-    apply_config(relay_config)
-    if not args.skip_relay:
-        relay = subprocess.Popen(
+    # Wait until the renderer is ready
+    if not args.use_default:
+        time.sleep(2)
+
+        # Create the upscaler process
+        upscaler_config = get_config(
+            "Upscaler", args.render_res, args.present_res, args.scene, args.upscaler
+        )
+        apply_config(upscaler_config)
+        # We do not encapsulate config creation in the following
+        # if statement because we may use Visual Studio to debug the upscaler
+
+    if not args.skip_upscaler:
+        upscaler = subprocess.Popen(
             [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe")],
             cwd=FSR_DIR,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
         )
-        print(f"Relay PID: {relay.pid}")
+        print(f"upscaler PID: {upscaler.pid}")
 
     # Register signal handlers
     def cleanup(sig, frame):
         print("Cleaning up...")
         renderer.kill()
-        if not args.skip_relay:
-            relay.kill()
+        if not args.skip_upscaler:
+            upscaler.kill()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
-    # Set focus to the relay
-    if not args.skip_relay:
+    # Set focus to the upscaler
+    if not args.skip_upscaler:
         time.sleep(2)
-        set_focus_by_pid(relay.pid)
+        set_focus_by_pid(upscaler.pid)
 
     dots = 0
     while True:
@@ -206,8 +212,8 @@ if __name__ == "__main__":
         if renderer.poll() is not None:
             break
 
-        # Check if the relay is still running
-        if not args.skip_relay and relay.poll() is not None:
+        # Check if the upscaler is still running
+        if not args.skip_upscaler and upscaler.poll() is not None:
             break
 
         print(

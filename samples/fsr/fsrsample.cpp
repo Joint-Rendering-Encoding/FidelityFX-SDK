@@ -45,7 +45,7 @@ using namespace cauldron;
 
 int32_t FSRSample::Init()
 {
-    if (m_RemoteMode == RemoteMode::Relay)
+    if ((m_OperationMode & OperationMode::Upscaler) == OperationMode::Upscaler)
     {
         // Initialize Streamline SDK
         sl::Preferences pref{};
@@ -63,13 +63,13 @@ int32_t FSRSample::Init()
 
 void FSRSample::PostDeviceInit()
 {
-    if (m_RemoteMode == RemoteMode::Relay)
+    if ((m_OperationMode & OperationMode::Upscaler) == OperationMode::Upscaler)
         slSetD3DDevice(GetDevice()->GetImpl()->DX12Device());
 }
 
 void FSRSample::Shutdown()
 {
-    if (m_RemoteMode == RemoteMode::Relay)
+    if ((m_OperationMode & OperationMode::Upscaler) == OperationMode::Upscaler)
     {
         // Cleanup
         sl::Result res = slShutdown();
@@ -94,21 +94,34 @@ void FSRSample::ParseSampleConfig()
     json remoteConfig = configData["Remote"];
 
     // Parse the remote config
-    m_RemoteMode = remoteConfig["Mode"].get<std::string>() == "Renderer" ? RemoteMode::Renderer : RemoteMode::Relay;
+    std::string opMode = remoteConfig["Mode"];
+    if (opMode == "Renderer")
+        m_OperationMode = OperationMode::Renderer;
+    else if (opMode == "Upscaler")
+        m_OperationMode = OperationMode::Upscaler;
+    else
+        m_OperationMode = OperationMode::Default;
 
     // Get the correct render modules
-    configData["RenderModules"] = m_RemoteMode == RemoteMode::Renderer ? remoteConfig["RenderModules"]["Renderer"] : remoteConfig["RenderModules"]["Relay"];
+    configData["RenderModules"] = remoteConfig["RenderModules"][opMode];
 
     // Get the correct render module overrides
-    configData["RenderModuleOverrides"] =
-        m_RemoteMode == RemoteMode::Renderer ? remoteConfig["RenderModuleOverrides"]["Renderer"] : remoteConfig["RenderModuleOverrides"]["Relay"];
+    configData["RenderModuleOverrides"] = remoteConfig["RenderModuleOverrides"][opMode];
 
-    // Remove content if we are in relay mode
-    if (m_RemoteMode == RemoteMode::Relay)
+    // Remove content if we are in upscaler mode
+    if (m_OperationMode == OperationMode::Upscaler)
         configData.erase("Content");
 
     // Set the startup upscaler method
     m_UIMethod = remoteConfig["StartupConfiguration"]["Upscaler"].get<UpscaleMethod>();
+
+    // Set FSRRemoteRenderModule specific options
+    json fsrrConfig;
+    fsrrConfig["Mode"]         = opMode;
+    fsrrConfig["RenderWidth"]  = remoteConfig["StartupConfiguration"]["RenderWidth"];
+    fsrrConfig["RenderHeight"] = remoteConfig["StartupConfiguration"]["RenderHeight"];
+
+    configData["RenderModuleOverrides"]["FSRRemoteRenderModule"] = fsrrConfig;
 
     // Let the framework parse all the "known" options for us
     ParseConfigData(configData);
@@ -124,12 +137,13 @@ void FSRSample::RegisterSampleModules()
     rendermodule::RegisterCommonRenderModules();
 
     // Register rest of the render modules
-    if (m_RemoteMode == RemoteMode::Renderer)
+    if ((m_OperationMode & OperationMode::Renderer) == OperationMode::Renderer)
     {
         // Init all pre-registered render modules
         rendermodule::RegisterAvailableRenderModules();
     }
-    else
+
+    if ((m_OperationMode & OperationMode::Upscaler) == OperationMode::Upscaler)
     {
         // Register the upscaler render modules
         RenderModuleFactory::RegisterModule<DLSSRenderModule>("DLSSRenderModule");
@@ -152,8 +166,8 @@ int32_t FSRSample::DoSampleInit()
     m_pFSRRemoteRenderModule = static_cast<FSRRemoteRenderModule*>(GetFramework()->GetRenderModule("FSRRemoteRenderModule"));
     CauldronAssert(ASSERT_CRITICAL, m_pFSRRemoteRenderModule, L"FidelityFX FSR Sample: Error: Could not find FSRRemote render module.");
 
-    // Rest is only needed if we are in Relay mode
-    if (m_RemoteMode != RemoteMode::Relay)
+    // Rest is only needed if we are in Upscaler mode
+    if ((m_OperationMode & OperationMode::Upscaler) != OperationMode::Upscaler)
         return 0;
 
     // Store pointers to various render modules
@@ -302,8 +316,8 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
 
 void FSRSample::DoSampleUpdates(double deltaTime)
 {
-    // Only needed if we are in Relay mode
-    if (m_RemoteMode != RemoteMode::Relay)
+    // Only needed if we are in Upscaler mode
+    if ((m_OperationMode & OperationMode::Upscaler) != OperationMode::Upscaler)
         return;
 
     // Upscaler changes need to be done before the rest of the frame starts executing
@@ -317,8 +331,8 @@ void FSRSample::DoSampleUpdates(double deltaTime)
 
 void FSRSample::DoSampleShutdown()
 {
-    // Only needed if we are in Relay mode
-    if (m_RemoteMode != RemoteMode::Relay)
+    // Only needed if we are in Upscaler mode
+    if ((m_OperationMode & OperationMode::Upscaler) != OperationMode::Upscaler)
         return;
 
     if (m_pCurrentUpscaler)

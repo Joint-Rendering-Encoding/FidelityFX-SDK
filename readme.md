@@ -1,72 +1,64 @@
-<h1>Welcome to the FidelityFX Super Resolution 3 SDK</h1>
+# Welcome to Detached FSR/DLSS Framework
 
-![alt text](/docs/media/fidelityfxsdk-logo-rescaled.png)
+This repository showcases a [sample](./samples/fsr/) implementation of the Detached FSR/DLSS Framework. It is possible to run the sample without detaching the upscaler as well. You can access the documentation for the individual methods used below:
 
-The FidelityFX SDK is a collection of heavily optimized, open source technologies (shader and runtime code) that can be used by developers to improve their DirectX®12 or Vulkan® applications. 
+-   [FSR (FidelityFX SDK)](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/55ff22bb6981a9b9c087b9465101769fc0acd447/readme.md)
+-   [DLSS (Streamline SDK)](https://github.com/NVIDIAGameWorks/Streamline/blob/c709dd9874e21dea100d6e2f2e109d16b87b8b55/README.md)
 
-This release of the FidelityFX SDK includes:
+## How to build the sample
 
-| [FidelityFX SDK](https://gpuopen.com/amd-fidelityfx-sdk/) Technique | [Samples](/docs/samples/index.md) | [GPUOpen](https://gpuopen.com/) page | Description |
-| --- | --- | --- | --- |
-| [Super Resolution (Interpolation enabled)](/docs/techniques/super-resolution-interpolation.md) 3.0.4 | [Super Resolution sample](/docs/samples/super-resolution.md) | [FidelityFX Super Resolution 3](https://gpuopen.com/fidelityfx-superresolution-3/) | Offers a solution for producing high resolution frames from lower resolution inputs and generating interpolated frames. |
-| [Optical Flow](/docs/techniques/optical-flow.md) 1.0                                                 | [Super Resolution sample](/docs/samples/super-resolution.md) | [FidelityFX Super Resolution 3](https://gpuopen.com/fidelityfx-superresolution-3/) | Estimates the motion between the current and the previous scene inputs. |
-| [Frame Interpolation](/docs/techniques/frame-interpolation.md) 1.0                                   | [Super Resolution sample](/docs/samples/super-resolution.md) | [FidelityFX Super Resolution 3](https://gpuopen.com/fidelityfx-superresolution-3/) | Generates an image half way between the previous and the current frame. |
-| [Frame Interpolation Swap Chain](/docs/techniques/frame-interpolation-swap-chain.md) 1.0             | [Super Resolution sample](/docs/samples/super-resolution.md) | [FidelityFX Super Resolution 3](https://gpuopen.com/fidelityfx-superresolution-3/) | Proxy swap chain to replace the DXGI swap chain and handle frame pacing, UI composition and presentation. |
+Building the sample is exactly the same as building the FidelityFX SDK. You can find the instructions [here](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/release-FSR3-3.0.4/docs/getting-started/building-samples.md). Be sure to build "Native-backed DLL" version.
 
-<h2>Further information</h2>
+To build our modified sample you should follow these instructions:
 
-- [Getting started](/docs/getting-started/index.md)
-  - [Overview](/docs/getting-started/index.md)
-  - [SDK structure](/docs/getting-started/sdk-structure.md)
-  - [Building the samples](/docs/getting-started/building-samples.md)
-  - [Running the samples](/docs/getting-started/running-samples.md)
-  - [Naming guidelines](/docs/getting-started/naming-guidelines.md)
+1. Install the following software developer tool minimum versions:
 
-- [Tools](/docs/tools/index.md)
-  - [Shader Precompiler](/docs/tools/ffx-sc.md)
-  - [FidelityFX SDK Media Delivery System](/docs/media-delivery.md)
+-   [CMake 3.17](https://cmake.org/download/)
+-   [Visual Studio 2019](https://visualstudio.microsoft.com/downloads/)
+-   [Windows 10 SDK 10.0.18362.0](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk)
+-   [Vulkan SDK 1.3.239](https://vulkan.lunarg.com/) (Not used in the sample, but required for the FidelityFX SDK)
 
-- Additional notes
-  - At this time, FSR3 only supports use of the native DirectX®12 backend. Please use [BuildFSRSolutionNative.bat](#BuildFSRSolutionNative.bat) or [BuildFSRSolutionNativeDll.bat](#BuildFSRSolutionNativeDll.bat) to build the backend and generate a solution for the sample.
-  - Some combinations of high-refresh rate monitors and graphics cards may not support VRR behaviour at the top range of the monitor's refresh rate. You may therefore have to set your monitor's max refresh rate to a value where VRR is supported.
-  - The GPU limiter in the sample can result in poor frame pacing at low frame rates. It is recommended to use the CPU limiter in all scenarios when examining FSR3 in the sample.
-   
-<h2>Known issues</h2>
+2. Generate Visual Studio FSR sample solutions:
 
-| FidelityFX SDK Sample | API / Configuration | Problem Description |
-| --- | --- | --- |
-| FidelityFX FSR | Vulkan® | Vulkan support is in development and will be released in a future version. |
-| FidelityFX FSR | Cauldron | The Cauldron backend is not supported by FSR3. |
+**Native-backend DLL version**
 
-<h2>Open source</h2>
+```bash
+> <installation path>\BuildFSRSolutionNativeDll.bat
+```
 
-AMD FidelityFX SDK is open source, and available under the MIT license.
+This will generate a `build\` directory where you will find the solution for either the native-backend-backed SDK samples (`FidelityFX SDK Native.sln`).
 
-For more information on the license terms please refer to [license](/docs/license.md).
+Also be sure to download media files using the following command:
 
-<h2>Disclaimer</h2>
+```bash
+> <installation path>\UpdateMedia.bat
+```
 
-The information contained herein is for informational purposes only, and is subject to change without notice. While every
-precaution has been taken in the preparation of this document, it may contain technical inaccuracies, omissions and typographical
-errors, and AMD is under no obligation to update or otherwise correct this information. Advanced Micro Devices, Inc. makes no
-representations or warranties with respect to the accuracy or completeness of the contents of this document, and assumes no
-liability of any kind, including the implied warranties of noninfringement, merchantability or fitness for particular purposes, with
-respect to the operation or use of AMD hardware, software or other products described herein. No license, including implied or
-arising by estoppel, to any intellectual property rights is granted by this document. Terms and limitations applicable to the purchase
-or use of AMD’s products are as set forth in a signed agreement between the parties or in AMD's Standard Terms and Conditions
-of Sale.
+> More information about this tool can be found [here](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/release-FSR3-3.0.4/docs/tools/media-delivery.md).
 
-AMD, the AMD Arrow logo, Radeon, Ryzen, CrossFire, RDNA and combinations thereof are trademarks of Advanced Micro Devices, Inc.
-Other product names used in this publication are for identification purposes only and may be trademarks of their respective companies.
+## A note on the sample
 
-DirectX is a registered trademark of Microsoft Corporation in the US and other jurisdictions.
+Detaching the upscaler from the rendering process requires both process to be in sync. To account for scheduling issues and not to drop any rendered frames, both processes will wait for each other to fill/empty the resource pool. The resource pool is a static pool of 10 buffers. Each buffer has enough space for all the required resources for both FSR and DLSS to function.
 
-Vulkan and the Vulkan logo are registered trademarks of the Khronos Group Inc.
+> It is possible to optimize this aspect by using a dynamic resource pool. This will allow the upscaler to run at a different rate than the renderer. However, at this time this sample is no more than a proof of concept.
 
-OpenCL is a trademark of Apple Inc. used by permission by Khronos Group, Inc.
+## How to run the sample
 
-Microsoft is a registered trademark of Microsoft Corporation in the US and other jurisdictions.
+Since we deploy two seperate processes for the upscaling and rendering, it becomes difficult to run it within the Visual Studio IDE. We recommend building the solution and the use the helper CLI tool ([governor](./governor.py)) to run the sample.
 
-Windows is a registered trademark of Microsoft Corporation in the US and other jurisdictions.
+1. Build the solution using the instructions above.
+2. Run the sample using the following command:
 
-© 2022-2023 Advanced Micro Devices, Inc. All rights reserved.
+```bash
+# Display help
+python governor.py -h
+
+# Example usage
+python governor.py --render-res 1285 835 --upscaler FSR3
+
+# Example usage without detaching the upscaler
+python governor.py --render-res 1285 835 --upscaler FSR3 --use-default
+
+# Example usage if you want to launch the upscaler from Visual Studio
+python governor.py --render-res 1285 835 --upscaler FSR3 --skip-upscaler # This will skip launching the upscaler
+```

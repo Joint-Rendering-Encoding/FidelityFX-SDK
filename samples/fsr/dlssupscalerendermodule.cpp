@@ -92,6 +92,10 @@ void DLSSUpscaleRenderModule::Init(const json& initData)
     m_DLSSOptions.performancePreset      = initData["performancePreset"].get<sl::DLSSPreset>();
     m_DLSSOptions.ultraPerformancePreset = initData["ultraPerformancePreset"].get<sl::DLSSPreset>();
 
+    // Get render resolution from config
+    m_RenderWidth  = initData["RenderWidth"].get<uint32_t>();
+    m_RenderHeight = initData["RenderHeight"].get<uint32_t>();
+
     // Fetch needed resources
     m_pColorTarget   = GetFramework()->GetColorTargetForCallback(GetName());
     m_pDepthTarget   = GetFramework()->GetRenderTexture(L"DepthTarget");
@@ -146,6 +150,43 @@ void DLSSUpscaleRenderModule::EnableModule(bool enabled)
             values = Vec2(-2.f * m_JitterX / resInfo.RenderWidth, 2.f * m_JitterY / resInfo.RenderHeight);
         };
         CameraComponent::SetJitterCallbackFunc(jitterCallback);
+
+        // Test the configuration
+        sl::DLSSOptimalSettings m_DLSSSettings;
+        m_DLSSOptions.outputWidth  = GetFramework()->GetResolutionInfo().DisplayWidth;
+        m_DLSSOptions.outputHeight = GetFramework()->GetResolutionInfo().DisplayHeight;
+        sl::Result res             = slDLSSGetOptimalSettings(m_DLSSOptions, m_DLSSSettings);
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to get optimal DLSS settings");
+        CauldronWarning(L"DLSS optimal settings: %dx%d, sharpness: %f. Resolution range (%d, %d) to (%d, %d)",
+                        m_DLSSSettings.optimalRenderWidth,
+                        m_DLSSSettings.optimalRenderHeight,
+                        m_DLSSSettings.optimalSharpness,
+                        m_DLSSSettings.renderWidthMin,
+                        m_DLSSSettings.renderHeightMin,
+                        m_DLSSSettings.renderWidthMax,
+                        m_DLSSSettings.renderHeightMax);
+
+        // Check if viewport is within the optimal range
+        CauldronAssert(ASSERT_CRITICAL,
+                       m_RenderWidth >= m_DLSSSettings.renderWidthMin,
+                       L"Render width is below optimal DLSS range (%d, %d)",
+                       m_RenderWidth,
+                       m_DLSSSettings.renderWidthMin);
+        CauldronAssert(ASSERT_CRITICAL,
+                       m_RenderWidth <= m_DLSSSettings.renderWidthMax,
+                       L"Render width is above optimal DLSS range (%d, %d)",
+                       m_RenderWidth,
+                       m_DLSSSettings.renderWidthMax);
+        CauldronAssert(ASSERT_CRITICAL,
+                       m_RenderHeight >= m_DLSSSettings.renderHeightMin,
+                       L"Render height is below optimal DLSS range (%d, %d)",
+                       m_RenderHeight,
+                       m_DLSSSettings.renderHeightMin);
+        CauldronAssert(ASSERT_CRITICAL,
+                       m_RenderHeight <= m_DLSSSettings.renderHeightMax,
+                       L"Render height is above optimal DLSS range (%d, %d)",
+                       m_RenderHeight,
+                       m_DLSSSettings.renderHeightMax);
     }
     else
     {
@@ -236,7 +277,7 @@ void DLSSUpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS options (%d)", res);
 
     // Get a new frame token
-    slGetNewFrameToken(m_pFrameToken);
+    slGetNewFrameToken(m_pFrameToken, GetFramework()->GetFrameID32());
 
     // Provide common constants
     sl::Constants constants{};

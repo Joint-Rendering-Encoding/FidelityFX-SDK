@@ -123,6 +123,13 @@ void FSRSample::ParseSampleConfig()
 
     configData["RenderModuleOverrides"]["FSRRemoteRenderModule"] = fsrrConfig;
 
+    // Set the render width and height for the upscale render modules
+    if (opMode != "Renderer")
+    {
+        configData["RenderModuleOverrides"]["DLSSUpscaleRenderModule"]["RenderWidth"]  = remoteConfig["StartupConfiguration"]["RenderWidth"];
+        configData["RenderModuleOverrides"]["DLSSUpscaleRenderModule"]["RenderHeight"] = remoteConfig["StartupConfiguration"]["RenderHeight"];
+    }
+
     // Let the framework parse all the "known" options for us
     ParseConfigData(configData);
 }

@@ -85,6 +85,8 @@ public:
     void OnResize(const cauldron::ResolutionInfo& resInfo) override;
 
 private:
+    uint32_t m_RenderWidth;
+    uint32_t m_RenderHeight;
     float m_UpscaleRatio = 2.f;
 
     // DLSS 2 API Context

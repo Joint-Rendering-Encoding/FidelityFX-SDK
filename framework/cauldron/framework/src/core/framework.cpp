@@ -377,6 +377,10 @@ namespace cauldron
         for (auto& task : m_Config.ContentCreationTasks)
             GetTaskManager()->AddTask(task);
 
+        // Hide the UI if we'll take a screenshot
+        if (m_Config.TakeScreenshot)
+            GetUIManager()->HideUI();
+
         // Request startup content
         for (const auto& scene : m_Config.StartupContent.Scenes)
         {

@@ -37,6 +37,11 @@ namespace cauldron
         delete m_pUIBackEnd;
     }
 
+    void UIManager::HideUI()
+    {
+        m_HideUI = true;
+    }
+
     void UIManager::Update(double deltaTime)
     {
         if (!m_pUIBackEnd->Ready())
@@ -46,7 +51,8 @@ namespace cauldron
 
         // Does back end updates, sets up input for the platform
         // and calls all UI building blocks
-        m_pUIBackEnd->Update(deltaTime);
+        if (!m_HideUI)
+            m_pUIBackEnd->Update(deltaTime);
 
         m_ProcessingUI = false;
     }

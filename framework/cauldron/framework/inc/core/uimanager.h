@@ -256,6 +256,11 @@ namespace cauldron
         virtual ~UIManager();
 
         /**
+         * @brief   Hides the UI.
+         */
+        void HideUI();
+
+        /**
          * @brief   Updates the UI for the frame, going through the <c><i>UIBackend</i></c>.
          */
         void Update(double deltaTime);
@@ -293,6 +298,7 @@ namespace cauldron
         UIBackend*              m_pUIBackEnd = nullptr;
         std::vector<UISection>  m_UIGeneralLayout = {};     // Layout for the general tab in the UI (all elements go here under various headings)
         std::atomic_bool        m_ProcessingUI = false;
+        bool                    m_HideUI = false;
     };
 
 } // namespace cauldron

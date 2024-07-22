@@ -138,8 +138,9 @@ void DLSSRenderModule::EnableModule(bool enabled)
     else
     {
         // Unload DLSS-G
-        res = slSetFeatureLoaded(sl::kFeatureDLSS_G, false);
-        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to unload DLSS-G (%d)", res);
+        // BUG: This doesn't really work, and we don't need it anyway as we don't change the upscalers during runtime
+        // res = slSetFeatureLoaded(sl::kFeatureDLSS_G, false);
+        // CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to unload DLSS-G (%d)", res);
 
         // Reset jitter callback
         CameraComponent::SetJitterCallbackFunc(nullptr);

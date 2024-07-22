@@ -180,7 +180,7 @@ if __name__ == "__main__":
     renderer_config = get_config(mode, args)
     apply_config(renderer_config)
     renderer = subprocess.Popen(
-        [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe")],
+        [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe"), "-screenshot", "-displaymode", "DISPLAYMODE_LDR"],
         cwd=FSR_DIR,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

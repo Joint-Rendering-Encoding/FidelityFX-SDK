@@ -40,9 +40,9 @@
         },
 
         "Remote": {
-            "Mode": "Default",
+            "Mode": "Renderer",
             "StartupConfiguration": {
-                "Upscaler": 9,
+                "Upscaler": 7,
                 "RenderWidth": 1920,
                 "RenderHeight": 1080
             },
@@ -209,7 +209,6 @@
 
         "FPSLimiter": {
             "Enable": true,
-            "UseReflex": true,
             "UseGPULimiter": true,
             "TargetFPS": 60
         }

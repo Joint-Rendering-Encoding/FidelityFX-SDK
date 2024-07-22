@@ -726,7 +726,6 @@ namespace cauldron
         {
             json fpsLimiterConfig     = configData["FPSLimiter"];
             m_Config.LimitFPS         = fpsLimiterConfig.value("Enable", m_Config.LimitFPS);
-            m_Config.UseReflex        = fpsLimiterConfig.value("UseReflex", m_Config.UseReflex);
             m_Config.GPULimitFPS      = fpsLimiterConfig.value("UseGPULimiter", m_Config.GPULimitFPS);
             m_Config.LimitedFrameRate = fpsLimiterConfig.value("TargetFPS", m_Config.LimitedFrameRate);
         }

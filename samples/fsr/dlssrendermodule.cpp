@@ -55,8 +55,10 @@ void DLSSRenderModule::Init(const json& initData)
                 adapterInfo.deviceLUIDSizeInBytes = sizeof(LUID);
 
                 sl::Result dlssRes   = slIsFeatureSupported(sl::kFeatureDLSS_G, adapterInfo);
+                sl::Result reflexRes = slIsFeatureSupported(sl::kFeatureReflex, adapterInfo);
+                sl::Result pclRes    = slIsFeatureSupported(sl::kFeaturePCL, adapterInfo);
 
-                if (dlssRes == sl::Result::eOk)
+                if (dlssRes == sl::Result::eOk && reflexRes == sl::Result::eOk && pclRes == sl::Result::eOk)
                     success++;
             }
             i++;
@@ -90,6 +92,12 @@ void DLSSRenderModule::Init(const json& initData)
     m_DLSSGOptions.flags = sl::DLSSGFlags::eDynamicResolutionEnabled;
     m_DLSSGOptions.mode  = initData["mode"].get<sl::DLSSGMode>();
 
+    // Set up Reflex
+    m_ReflexOptions.mode         = sl::ReflexMode::eLowLatency;
+    m_ReflexOptions.frameLimitUs = 0;
+    res                          = slReflexSetOptions(m_ReflexOptions);
+    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set Reflex options (%d)", res);
+
     // Fetch needed resources
     m_pDepthTarget   = GetFramework()->GetRenderTexture(L"DepthTarget");
     m_pMotionVectors = GetFramework()->GetRenderTexture(L"GBufferMotionVectorRT");
@@ -117,6 +125,14 @@ void DLSSRenderModule::EnableModule(bool enabled)
 
     if (enabled)
     {
+        // Load PCL
+        res = slSetFeatureLoaded(sl::kFeaturePCL, true);
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to load PCL (%d)", res);
+
+        // Load Reflex
+        res = slSetFeatureLoaded(sl::kFeatureReflex, true);
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to load Reflex (%d)", res);
+
         // Load DLSS-G
         res = slSetFeatureLoaded(sl::kFeatureDLSS_G, true);
         CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to load DLSS-G (%d)", res);
@@ -181,13 +197,60 @@ void DLSSRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
     sl::ResourceTag tags[] = {depthTag, mvecTag};
     res                    = slSetTag(m_Viewport, tags, _countof(tags), pCmdList->GetImpl()->DX12CmdList());
-    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS-G tags (%d)", res);
+    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS tags (%d)", res);
 
     // Set DLSS options
     m_DLSSGOptions.dynamicResHeight = resInfo.RenderHeight;
     m_DLSSGOptions.dynamicResWidth  = resInfo.RenderWidth;
     res                             = slDLSSGSetOptions(m_Viewport, m_DLSSGOptions);
-    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS-G options (%d)", res);
+    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS options (%d)", res);
+
+    // Get a new frame token
+    slGetNewFrameToken(m_pFrameToken);
+
+    // Provide common constants
+    sl::Constants constants{};
+    constants.mvecScale              = {1.0f / resInfo.RenderWidth, 1.0f / resInfo.RenderHeight};
+    constants.jitterOffset           = {-m_JitterX, -m_JitterY};
+    constants.depthInverted          = GetConfig()->InvertedDepth ? sl::Boolean::eTrue : sl::Boolean::eFalse;
+    constants.cameraPinholeOffset    = {0.0f, 0.0f};
+    constants.reset                  = sl::Boolean::eFalse;
+    constants.motionVectors3D        = sl::Boolean::eFalse;
+    constants.orthographicProjection = sl::Boolean::eFalse;
+    constants.motionVectorsDilated   = sl::Boolean::eFalse;
+    constants.motionVectorsJittered  = sl::Boolean::eFalse;
+
+    // Camera constants
+    constants.cameraViewToClip = pCamera->GetViewProjection();
+    constants.clipToCameraView = pCamera->GetInverseViewProjection();
+    constants.clipToPrevClip   = pCamera->GetPreviousViewProjection();
+    constants.prevClipToClip   = inverse(pCamera->GetPreviousViewProjection());
+
+    // Camera position and direction
+    constants.cameraPos   = pCamera->GetCameraPos();
+    constants.cameraUp    = pCamera->GetUp().getXYZ();
+    constants.cameraRight = pCamera->GetRight().getXYZ();
+    constants.cameraFwd   = pCamera->GetDirection().getXYZ();
+
+    // Camera planes
+    constants.cameraNear = pCamera->GetNearPlane();
+    constants.cameraFar  = pCamera->GetFarPlane();
+    constants.cameraFOV  = pCamera->GetFovY();
+
+    // Rest of the camera constants
+    constants.cameraAspectRatio    = resInfo.GetDisplayAspectRatio();
+    constants.cameraMotionIncluded = sl::Boolean::eTrue;
+
+    res = slSetConstants(constants, *m_pFrameToken, m_Viewport);
+    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS constants (%d)", res);
+
+    // Sleep with Reflex
+    res = slReflexSleep(*m_pFrameToken);  // TODO: Integrate Reflex in FPS limiter
+    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to sleep with Reflex (%d)", res);
+
+    // Ping PCL
+    res = slPCLSetMarker(sl::PCLMarker::ePCLatencyPing, *m_pFrameToken);
+    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to ping PCL (%d)", res);
 
     SetAllResourceViewHeaps(pCmdList);
 }

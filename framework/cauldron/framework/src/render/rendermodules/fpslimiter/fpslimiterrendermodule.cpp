@@ -18,6 +18,7 @@
 // THE SOFTWARE.
 
 #include "fpslimiterrendermodule.h"
+#include "render/dx12/device_dx12.h"
 
 #include "core/framework.h"
 #include "render/device.h"
@@ -56,6 +57,63 @@ void FPSLimiterRenderModule::Init(const json& initData)
     m_LimitFPS                    = pConfig->LimitFPS;
     m_LimitGPU                    = pConfig->GPULimitFPS;
     m_TargetFPS                   = pConfig->LimitedFrameRate;
+    m_UseReflex                   = pConfig->UseReflex;
+
+    // Check if Reflex is supported
+    sl::Result                           res             = sl::Result::eOk;
+    bool                                 reflexSupported = true;
+    Microsoft::WRL::ComPtr<IDXGIFactory> factory;
+    if (SUCCEEDED(CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)&factory)))
+    {
+        Microsoft::WRL::ComPtr<IDXGIAdapter> adapter{};
+        uint32_t                             i       = 0;
+        uint32_t                             success = 0;
+        while (factory->EnumAdapters(i, &adapter) != DXGI_ERROR_NOT_FOUND)
+        {
+            DXGI_ADAPTER_DESC desc{};
+            if (SUCCEEDED(adapter->GetDesc(&desc)))
+            {
+                sl::AdapterInfo adapterInfo{};
+                adapterInfo.deviceLUID            = (uint8_t*)&desc.AdapterLuid;
+                adapterInfo.deviceLUIDSizeInBytes = sizeof(LUID);
+
+                sl::Result reflexRes = slIsFeatureSupported(sl::kFeatureReflex, adapterInfo);
+                sl::Result pclRes    = slIsFeatureSupported(sl::kFeaturePCL, adapterInfo);
+
+                if (reflexRes == sl::Result::eOk && pclRes == sl::Result::eOk)
+                    success++;
+            }
+            i++;
+        }
+
+        if (success == 0)
+        {
+            reflexSupported = false;
+            m_UseReflex = false;
+            CauldronWarning(L"Reflex is not supported on this system");
+        }
+    }
+    else
+        CauldronCritical(L"Failed to create DXGI Factory");
+
+    if (m_UseReflex)
+    {
+        res = slSetFeatureLoaded(sl::kFeaturePCL, true);
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to load PCL (%d)", res);
+
+        res = slSetFeatureLoaded(sl::kFeatureReflex, true);
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to load Reflex (%d)", res);
+        m_ReflexLoaded = true;
+    }
+
+    if (reflexSupported)
+    {
+        // Set up Reflex
+        m_ReflexOptions.mode         = sl::ReflexMode::eLowLatency;
+        m_ReflexOptions.frameLimitUs = (uint32_t)(1000000 / m_TargetFPS);
+        sl::Result res               = slReflexSetOptions(m_ReflexOptions);
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set Reflex options (%d)", res);
+    }
 
     // Create FPS limiter buffer and transition it right away
     BufferDesc bufDesc = BufferDesc::Data(L"FPSLimiter_Buffer", BufferLength, 4, 0, ResourceFlags::AllowUnorderedAccess);
@@ -87,12 +145,26 @@ void FPSLimiterRenderModule::Init(const json& initData)
     m_UISection.SectionName = "FPS Limiter";
 
     m_UISection.AddCheckBox("Enable FPS Limiter", &m_LimitFPS);
+    m_UISection.AddCheckBox("Use Reflex", &m_UseReflex, [&](bool enabled) {
+        if (!reflexSupported)
+        {
+            m_UseReflex = false;
+            return;
+        }
+
+        m_UseReflex = enabled;
+        if (m_UseReflex && !m_ReflexLoaded)
+            CauldronCritical(L"Reflex must be selected at startup");
+    });
     m_UISection.AddCheckBox("GPU Limiter", &m_LimitGPU, nullptr, &m_LimitFPS);
     m_UISection.AddIntSlider("Target FPS", &m_TargetFPS, 5, 240, nullptr, &m_LimitFPS);
     GetUIManager()->RegisterUIElements(m_UISection);
 
     // We are now ready for use
     SetModuleReady(true);
+
+    // Enable the module by default
+    SetModuleEnabled(true);
 }
 
 static void TimerSleepQPC(int64_t targetQPC)
@@ -118,6 +190,24 @@ void FPSLimiterRenderModule::Execute(double deltaTime, cauldron::CommandList* pC
 {
     if (!m_LimitFPS)
         return;
+
+    if (m_UseReflex)
+    {
+        sl::FrameToken* m_pFrameToken = nullptr;
+
+        // Get a new frame token
+        slGetNewFrameToken(m_pFrameToken, GetFramework()->GetFrameID32());
+
+        // Sleep with Reflex
+        sl::Result res = slReflexSleep(*m_pFrameToken);
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to sleep with Reflex (%d)", res);
+
+        // Ping PCL
+        res = slPCLSetMarker(sl::PCLMarker::ePCLatencyPing, *m_pFrameToken);
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to ping PCL (%d)", res);
+
+        return;
+    }
 
     // If we aren't doing GPU-based limiting, sleep the CPU
     if (!m_LimitGPU)

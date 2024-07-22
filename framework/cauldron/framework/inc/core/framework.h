@@ -149,6 +149,7 @@ namespace cauldron
         // FPS limiter
         bool LimitFPS : 1;
         bool GPULimitFPS : 1;
+        bool UseReflex : 1;
 
         // Acceleration Structure
         bool BuildRayTracingAccelerationStructure : 1;
@@ -593,6 +594,14 @@ namespace cauldron
          * @brief   Gets the current frame ID.
          */
         uint64_t GetFrameID() const { return m_FrameID; }
+
+        /**
+         * @brief   Gets the current frame ID. Clamp to 32-bit for Streamline SDK.
+         */
+        const uint32_t* GetFrameID32() const
+        {
+            return reinterpret_cast<const uint32_t*>(&m_FrameID);
+        }
 
         /**
          * @brief   Query whether the sample is currently running.

@@ -28,8 +28,6 @@
 #include <sl.h>
 #include <sl_consts.h>
 #include <sl_dlss_g.h>
-#include <sl_reflex.h>
-#include <sl_pcl.h>
 
 #include <functional>
 
@@ -90,9 +88,7 @@ private:
     float m_UpscaleRatio = 2.f;
 
     // DLSS 3 API Context
-    sl::ReflexOptions  m_ReflexOptions = {};
     sl::DLSSGOptions   m_DLSSGOptions  = {};
-    sl::FrameToken*    m_pFrameToken   = nullptr;
     sl::ViewportHandle m_Viewport      = {0};
     uint32_t           m_JitterIndex   = 0;
     float              m_JitterX       = 0.f;

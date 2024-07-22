@@ -24,6 +24,10 @@
 #include "misc/math.h"
 #include <chrono>
 
+#include <sl.h>
+#include <sl_pcl.h>
+#include <sl_reflex.h>
+
 namespace cauldron
 {
     class ParameterSet;
@@ -57,11 +61,16 @@ private:
     uint64_t                 m_FrameTimeHistoryCount = 0;
     std::chrono::nanoseconds m_LastFrameEnd{0};
 
+    // Reflex
+    sl::ReflexOptions m_ReflexOptions = {};
+    bool              m_ReflexLoaded  = false;
+
     // UI
     cauldron::UISection m_UISection;
-    bool                m_LimitFPS      = false;
-    bool                m_LimitGPU      = true;
-    int32_t             m_TargetFPS     = 240;
+    bool                m_UseReflex = false;
+    bool                m_LimitFPS  = false;
+    bool                m_LimitGPU  = true;
+    int32_t             m_TargetFPS = 240;
 };
 
 }  // namespace cauldron

@@ -121,7 +121,7 @@ add_library(Framework STATIC
 
 target_compile_definitions(Framework PRIVATE RenderModuleRoot="${RENDERMODULE_ROOT}")
 
-target_link_libraries (Framework stb imgui
+target_link_libraries (Framework stb imgui streamlinesdk
     $<$<OR:$<CONFIG:DebugVK>,$<CONFIG:ReleaseVK>>: amd_acs dxc "Vulkan::Vulkan" Xinput Shcore>
     $<$<OR:$<CONFIG:DebugDX12>,$<CONFIG:ReleaseDX12>,$<CONFIG:RelWithDebInfoDX12>>: amd_acs dxc DXGI amd_ags memoryallocator
 	D3D12 pixlib agilitysdk dxheaders Xinput Shcore>)

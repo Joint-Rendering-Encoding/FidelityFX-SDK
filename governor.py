@@ -35,35 +35,39 @@ UPSCALERS = [
     "DLSS",
 ]
 
+DLSS_MODES = [
+    "Performance",
+    "Balanced",
+    "Quality",
+    "UltraPerformance",
+]
+
 # Get the default configf
 with open(os.path.join(FSR_DIR, "configs/fsrconfig.json"), "r", encoding="utf-8") as f:
     config = json.load(f)
 
 
 # Prepare the config
-def get_config(
-    mode,
-    render_res=(1920, 1080),
-    present_res=(2560, 1440),
-    scene="Sponza",
-    upscaler="FSR3",
-):
+def get_config(mode, args):
     tmp = copy.deepcopy(config)
 
     # Apply mode specific settings
     tmp["FidelityFX FSR"]["Remote"]["Mode"] = mode
 
     # Apply present resolution settings
-    tmp["FidelityFX FSR"]["Presentation"]["Width"] = present_res[0]
-    tmp["FidelityFX FSR"]["Presentation"]["Height"] = present_res[1]
+    tmp["FidelityFX FSR"]["Presentation"]["Width"] = args.present_res[0]
+    tmp["FidelityFX FSR"]["Presentation"]["Height"] = args.present_res[1]
+
+    # Apply FPS settings
+    tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = args.fps
 
     # Apply scene settings
-    if scene == "Sponza":
+    if args.scene == "Sponza":
         tmp["FidelityFX FSR"]["Content"]["Scenes"] = [
             "../media/SponzaNew/MainSponza.gltf"
         ]
         tmp["FidelityFX FSR"]["Content"]["Camera"] = "PhysCamera003"
-    elif scene == "Brutalism":
+    elif args.scene == "Brutalism":
         tmp["FidelityFX FSR"]["Content"]["Scenes"] = [
             "../media/Brutalism/BrutalistHall.gltf"
         ]
@@ -73,10 +77,19 @@ def get_config(
 
     # Apply upscaler settings
     tmp["FidelityFX FSR"]["Remote"]["StartupConfiguration"] = {
-        "Upscaler": UPSCALERS.index(upscaler),
-        "RenderWidth": render_res[0],
-        "RenderHeight": render_res[1],
+        "Upscaler": UPSCALERS.index(args.upscaler),
+        "RenderWidth": args.render_res[0],
+        "RenderHeight": args.render_res[1],
     }
+
+    # Apply DLSS settings
+    if "DLSS" in args.upscaler:
+        tmp["FidelityFX FSR"]["Remote"]["RenderModuleOverrides"]["Default"][
+            "DLSSUpscaleRenderModule"
+        ]["mode"] = (DLSS_MODES.index(args.dlssMode) + 1)
+        tmp["FidelityFX FSR"]["Remote"]["RenderModuleOverrides"]["Upscaler"][
+            "DLSSUpscaleRenderModule"
+        ]["mode"] = (DLSS_MODES.index(args.dlssMode) + 1)
 
     return tmp
 
@@ -103,6 +116,19 @@ def parse_args():
         nargs=2,
         default=[2560, 1440],
         help="Present resolution (width height)",
+    )
+    parser.add_argument(
+        "--dlssMode",
+        type=str,
+        default="Performance",
+        choices=DLSS_MODES,
+        help="DLSS mode to use",
+    )
+    parser.add_argument(
+        "--fps",
+        type=int,
+        default=60,
+        help="The FPS to run the renderer at",
     )
     parser.add_argument(
         "--scene",
@@ -151,9 +177,7 @@ if __name__ == "__main__":
 
     # Create the renderer process
     mode = "Default" if args.use_default else "Renderer"
-    renderer_config = get_config(
-        mode, args.render_res, args.present_res, args.scene, args.upscaler
-    )
+    renderer_config = get_config(mode, args)
     apply_config(renderer_config)
     renderer = subprocess.Popen(
         [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe")],
@@ -173,9 +197,7 @@ if __name__ == "__main__":
         time.sleep(2)
 
         # Create the upscaler process
-        upscaler_config = get_config(
-            "Upscaler", args.render_res, args.present_res, args.scene, args.upscaler
-        )
+        upscaler_config = get_config("Upscaler", args)
         apply_config(upscaler_config)
         # We do not encapsulate config creation in the following
         # if statement because we may use Visual Studio to debug the upscaler

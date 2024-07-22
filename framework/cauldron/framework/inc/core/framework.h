@@ -201,7 +201,7 @@ namespace cauldron
 
         // Perf Output
         uint32_t                      BenchmarkFrameDuration = -1;
-        std::wstring                  BenchmarkPath = L"";
+        std::wstring                  BenchmarkPath = L"benchmark";
 
         std::vector<std::pair<std::wstring, std::wstring>> BenchmarkPermutationOptions = {};
 

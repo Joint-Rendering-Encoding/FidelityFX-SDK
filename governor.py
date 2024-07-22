@@ -42,8 +42,8 @@ DLSS_MODES = [
     "UltraPerformance",
 ]
 
-# Get the default configf
-with open(os.path.join(FSR_DIR, "configs/fsrconfig.json"), "r", encoding="utf-8") as f:
+# Get the default config
+with open(os.path.join(SCRIPT_DIR, "samples/fsr/config/fsrconfig.json"), "r", encoding="utf-8") as f:
     config = json.load(f)
 
 
@@ -74,6 +74,18 @@ def get_config(mode, args):
         tmp["FidelityFX FSR"]["Content"]["Camera"] = "persp9_Orientation"
     else:
         raise ValueError("Invalid scene")
+
+    # Apply reduced motion settings
+    if args.reduced_motion:
+        tmp["FidelityFX FSR"]["Content"]["ParticleSpawners"] = []
+        tmp["FidelityFX FSR"]["Remote"]["RenderModules"]["Default"].remove("AnimatedTexturesRenderModule")
+        tmp["FidelityFX FSR"]["Remote"]["RenderModules"]["Renderer"].remove("AnimatedTexturesRenderModule")
+
+    # Apply benchmark settings
+    if args.benchmark > 0 and mode != "Renderer":
+        tmp["FidelityFX FSR"]["Benchmark"] = {}
+        tmp["FidelityFX FSR"]["Benchmark"]["Enabled"] = True
+        tmp["FidelityFX FSR"]["Benchmark"]["FrameDuration"] = args.benchmark * 60 # We always run the upscaler at 60 FPS
 
     # Apply upscaler settings
     tmp["FidelityFX FSR"]["Remote"]["StartupConfiguration"] = {
@@ -131,6 +143,18 @@ def parse_args():
         help="The FPS to run the renderer at",
     )
     parser.add_argument(
+        "--reduced-motion",
+        action="store_true",
+        default=False,
+        help="Enable reduced motion mode, disables animated textures and particles",
+    )
+    parser.add_argument(
+        "--benchmark",
+        type=int,
+        default=-1,
+        help="Enable benchmark mode, sets the test duration in seconds",
+    )
+    parser.add_argument(
         "--scene",
         type=str,
         default="Sponza",
@@ -180,7 +204,12 @@ if __name__ == "__main__":
     renderer_config = get_config(mode, args)
     apply_config(renderer_config)
     renderer = subprocess.Popen(
-        [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe"), "-screenshot", "-displaymode", "DISPLAYMODE_LDR"],
+        [
+            os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe"),
+            "-screenshot",
+            "-displaymode",
+            "DISPLAYMODE_LDR",
+        ],
         cwd=FSR_DIR,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

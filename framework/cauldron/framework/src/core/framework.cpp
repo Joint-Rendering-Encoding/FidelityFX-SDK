@@ -426,12 +426,16 @@ namespace cauldron
             if (!outputPath.empty())
                 filesystem::create_directory(outputPath);
 
+            // Get process PID
+            const std::wstring pid = std::to_wstring(GetCurrentProcessId());
+
             // Make a file name that is unique (sample name exe + permutations of interest + time stamp to seconds)
             std::wstringstream fileName;
-            fileName << m_Config.AppName << '_' << GetDevice()->GetDeviceName();
+            fileName << m_Name << '_' << pid;
 
             // Add resolution
             const ResolutionInfo& resInfo = GetFramework()->GetResolutionInfo();
+            fileName << '_' << resInfo.RenderWidth << 'x' << resInfo.RenderHeight;
             fileName << '_' << resInfo.DisplayWidth << 'x' << resInfo.DisplayHeight;
 
             // Add permutations to file name for further identification
@@ -476,27 +480,29 @@ namespace cauldron
             if (!m_Config.BenchmarkPath.empty())
                 filesystem::create_directory(m_Config.BenchmarkPath);
 
-            std::wstring fileName;
+            // Get process PID
+            const std::wstring pid = std::to_wstring(GetCurrentProcessId());
+
+            std::wstringstream fileName;
             if (m_Config.BenchmarkAppend)
             {
                 // no timestamp, write everything into one file.
-                fileName = m_Name + L"-perf" + (m_Config.BenchmarkJson ? L".json" : L".csv");
+                fileName << m_Name << L"_" << pid << L"_perf" << (m_Config.BenchmarkJson ? L".json" : L".csv");
             }
             else
             {
 #pragma warning(push)
 #pragma warning(disable:4996) // Avoid deprecation warning on std::localtime
-                // put timestamp in filename to avoid overwriting
-                // have to use C-style time formatting because C++11 does not have any
-                std::time_t  now = std::time(nullptr);
-                std::wstring timeString(64, ' ');
-                timeString.resize(std::wcsftime(&timeString[0], timeString.size(), L"%FT%H-%M-%S", std::localtime(&now)));
-                fileName = m_Name + L"-perf-" + timeString + (m_Config.BenchmarkJson ? L".json" : L".csv");
+                auto now       = std::chrono::system_clock::now();
+                auto in_time_t = std::chrono::system_clock::to_time_t(now);
+                fileName << m_Name << L"_" << pid << L"_perf_";
+                fileName << std::put_time(std::localtime(&in_time_t), L"%Y-%m-%d-%H-%M-%S");
+                fileName << (m_Config.BenchmarkJson ? L".json" : L".csv");
 #pragma warning(pop)
             }
 
             // Open for writing
-            filesystem::path outputFile = outputPath / fileName;
+            filesystem::path outputFile = outputPath / fileName.str();
             // create the file if it does not exist
             std::wofstream   file(outputFile.c_str(), m_Config.BenchmarkAppend ? std::ios_base::app : std::ios_base::out);
             if (m_Config.BenchmarkAppend)
@@ -1350,9 +1356,7 @@ namespace cauldron
                 }
 
                 // Force FPS limiting on (GPU) when doing benchmarking
-                m_Config.LimitFPS = true;
-                m_Config.GPULimitFPS = true;
-                m_Config.LimitedFrameRate = 60;
+                CauldronAssert(ASSERT_WARNING, m_Config.LimitFPS, L"FPS limiting must be enabled when benchmarking");
 
                 // cycle through all the options until we hit the next core command line option or end of arguments
                 int localArg = currentArg + 1;

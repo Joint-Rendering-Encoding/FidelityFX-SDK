@@ -6,6 +6,7 @@ import time
 import signal
 import argparse
 import subprocess
+from datetime import datetime, timezone
 
 # Windows specific imports
 import win32gui
@@ -48,6 +49,10 @@ with open(
     os.path.join(SCRIPT_DIR, "samples/fsr/config/fsrconfig.json"), "r", encoding="utf-8"
 ) as f:
     config = json.load(f)
+
+
+def utcnow_iso8601():
+    return datetime.now(timezone.utc).isoformat()
 
 
 # Prepare the config
@@ -192,6 +197,12 @@ def parse_args():
         default=False,
         help="Use the default config, without decoupling the upscaler",
     )
+    parser.add_argument(
+        "--structured-logs",
+        action="store_true",
+        default=False,
+        help="Enable structured logs",
+    )
     return parser.parse_args()
 
 
@@ -249,7 +260,10 @@ if __name__ == "__main__":
         stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL,
     )
-    print(f"Renderer PID: {renderer.pid}")
+    if args.structured_logs:
+        print("RENDERER_PID", renderer.pid)
+    else:
+        print(f"Renderer PID: {renderer.pid}")
 
     # Default mode implies skipping the upscaler
     if args.use_default:
@@ -273,12 +287,17 @@ if __name__ == "__main__":
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
         )
-        print(f"Upscaler PID: {upscaler.pid}")
+        if args.structured_logs:
+            print("UPSCALER_PID", upscaler.pid)
+        else:
+            print(f"Upscaler PID: {upscaler.pid}")
 
     # Register signal handlers
     def cleanup(sig, frame):
-        print()
-        print("Cleaning up...")
+        if not args.structured_logs:
+            print()
+            print("Cleaning up...")
+
         # Try to gracefully close the processes
         if renderer.poll() is None:
             close_by_pid(renderer.pid)
@@ -313,6 +332,8 @@ if __name__ == "__main__":
 
     dots = 0
     test_start_time = time.time()
+    if args.structured_logs:
+        print("TEST_START", utcnow_iso8601())
     while True:
         # Check if the renderer is still running
         if renderer.poll() is not None:
@@ -326,13 +347,17 @@ if __name__ == "__main__":
         if args.benchmark > 0 and time.time() - test_start_time > args.benchmark:
             break
 
-        print(
-            f"Waiting for process(es) to finish{'.' * dots + ' ' * (4 - dots)}",
-            end="\r",
-        )
+        if not args.structured_logs:
+            print(
+                f"Waiting for process(es) to finish{'.' * dots + ' ' * (4 - dots)}",
+                end="\r",
+            )
+            dots = (dots + 1) % 4
         time.sleep(0.5)
-        dots = (dots + 1) % 4
 
-    print()
-    print("Process(es) finished")
+    if args.structured_logs:
+        print("TEST_END", utcnow_iso8601())
+    else:
+        print()
+        print("Process(es) finished")
     cleanup(None, None)

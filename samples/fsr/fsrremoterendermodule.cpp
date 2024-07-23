@@ -52,9 +52,9 @@ void FSRRemoteRenderModule::Init(const json& initData)
         // The framework will run MainLoop based on the outcome of this function
         GetFramework()->SetReadyFunction([this]() {
             if (!m_UpscalerModeEnabled)
-                return m_DX12Ops->hasBufferWithState(DX12Ops::BufferState::IDLE);
+                return m_DX12Ops->bufferStateMatches(m_BufferIndex, DX12Ops::BufferState::IDLE);
             else
-                return m_DX12Ops->hasBufferWithState(DX12Ops::BufferState::READY);
+                return m_DX12Ops->bufferStateMatches(m_BufferIndex, DX12Ops::BufferState::READY);
         });
     }
 

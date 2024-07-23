@@ -39,23 +39,10 @@ public:
         READY,
     };
 
-    bool hasBufferWithState(BufferState state)
+    bool bufferStateMatches(int bufferIndex, BufferState state)
     {
-        for (size_t i = 0; i < FSR_BUFFER_COUNT; i++)
-        {
-            ID3D12Resource* pResource = std::get<0>(p_SharedBuffer[i]);
-            ID3D12Fence*    pFence    = std::get<1>(p_SharedBuffer[i]);
-
-            if (pResource && pFence)
-            {
-                if (pFence->GetCompletedValue() == static_cast<UINT64>(state))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        ID3D12Fence* pFence = std::get<1>(p_SharedBuffer[bufferIndex]);
+        return pFence->GetCompletedValue() == static_cast<UINT64>(state);
     }
 
     void CreateSharedBuffers(FSRResources pResources, bool shouldCreate = false);

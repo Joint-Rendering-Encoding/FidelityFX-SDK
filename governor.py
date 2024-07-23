@@ -9,6 +9,7 @@ import subprocess
 
 # Windows specific imports
 import win32gui
+import win32api
 import win32process
 import win32con
 import ctypes
@@ -43,7 +44,9 @@ DLSS_MODES = [
 ]
 
 # Get the default config
-with open(os.path.join(SCRIPT_DIR, "samples/fsr/config/fsrconfig.json"), "r", encoding="utf-8") as f:
+with open(
+    os.path.join(SCRIPT_DIR, "samples/fsr/config/fsrconfig.json"), "r", encoding="utf-8"
+) as f:
     config = json.load(f)
 
 
@@ -59,7 +62,18 @@ def get_config(mode, args):
     tmp["FidelityFX FSR"]["Presentation"]["Height"] = args.present_res[1]
 
     # Apply FPS settings
-    tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = args.fps
+    tmp["FidelityFX FSR"]["FPSLimiter"]["UseReflex"] = False  # Not operational
+    tmp["FidelityFX FSR"]["FPSLimiter"][
+        "UseGPULimiter"
+    ] = False  # Messes with GPU metrics
+
+    if mode != "Upscaler":
+        assert args.fps == 60 or args.fps == 30, "FPS must be 60 or 30"
+        tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = args.fps
+    else:
+        tmp["FidelityFX FSR"]["FPSLimiter"][
+            "TargetFPS"
+        ] = 60  # We always run the upscaler at 60 FPS
 
     # Apply scene settings
     if args.scene == "Sponza":
@@ -78,14 +92,12 @@ def get_config(mode, args):
     # Apply reduced motion settings
     if args.reduced_motion:
         tmp["FidelityFX FSR"]["Content"]["ParticleSpawners"] = []
-        tmp["FidelityFX FSR"]["Remote"]["RenderModules"]["Default"].remove("AnimatedTexturesRenderModule")
-        tmp["FidelityFX FSR"]["Remote"]["RenderModules"]["Renderer"].remove("AnimatedTexturesRenderModule")
-
-    # Apply benchmark settings
-    if args.benchmark > 0 and mode != "Renderer":
-        tmp["FidelityFX FSR"]["Benchmark"] = {}
-        tmp["FidelityFX FSR"]["Benchmark"]["Enabled"] = True
-        tmp["FidelityFX FSR"]["Benchmark"]["FrameDuration"] = args.benchmark * 60 # We always run the upscaler at 60 FPS
+        tmp["FidelityFX FSR"]["Remote"]["RenderModules"]["Default"].remove(
+            "AnimatedTexturesRenderModule"
+        )
+        tmp["FidelityFX FSR"]["Remote"]["RenderModules"]["Renderer"].remove(
+            "AnimatedTexturesRenderModule"
+        )
 
     # Apply upscaler settings
     tmp["FidelityFX FSR"]["Remote"]["StartupConfiguration"] = {
@@ -183,33 +195,55 @@ def parse_args():
     return parser.parse_args()
 
 
-def set_focus_by_pid(pid):
-    def enum_windows_callback(hwnd, pid):
+def find_window_by_pid(pid, window_title="FidelityFX FSR"):
+    def enum_windows_callback(hwnd, windows):
         if win32gui.IsWindowVisible(hwnd) and win32gui.IsWindowEnabled(hwnd):
             _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
-            title = win32gui.GetWindowText(hwnd)
-            if found_pid == pid and title == "FidelityFX FSR":
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
-                ctypes.windll.user32.ShowWindow(hwnd, win32con.SW_RESTORE)
-                return True
+            if found_pid == pid:
+                title = win32gui.GetWindowText(hwnd)
+                if window_title is None or title == window_title:
+                    windows.append(hwnd)
 
-    win32gui.EnumWindows(enum_windows_callback, pid)
+    windows = []
+    win32gui.EnumWindows(enum_windows_callback, windows)
+    return windows[0] if windows else None
+
+
+def focus_by_pid(pid):
+    hwnd = find_window_by_pid(pid)
+    if hwnd:
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+        ctypes.windll.user32.ShowWindow(hwnd, win32con.SW_RESTORE)
+        return True
+    return False
+
+
+def close_by_pid(pid):
+    hwnd = find_window_by_pid(pid)
+    if hwnd:
+        win32api.PostMessage(hwnd, win32con.WM_QUIT, 0, 0)
+        return True
+    return False
 
 
 if __name__ == "__main__":
     args = parse_args()
+
+    # Default process arguments
+    process_args = [
+        "-screenshot",
+        "-displaymode",
+        "DISPLAYMODE_LDR",
+        "-benchmark",
+        "json",
+    ]
 
     # Create the renderer process
     mode = "Default" if args.use_default else "Renderer"
     renderer_config = get_config(mode, args)
     apply_config(renderer_config)
     renderer = subprocess.Popen(
-        [
-            os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe"),
-            "-screenshot",
-            "-displaymode",
-            "DISPLAYMODE_LDR",
-        ],
+        [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe"), *process_args],
         cwd=FSR_DIR,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -233,20 +267,40 @@ if __name__ == "__main__":
 
     if not args.skip_upscaler:
         upscaler = subprocess.Popen(
-            [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe")],
+            [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe"), *process_args],
             cwd=FSR_DIR,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
         )
-        print(f"upscaler PID: {upscaler.pid}")
+        print(f"Upscaler PID: {upscaler.pid}")
 
     # Register signal handlers
     def cleanup(sig, frame):
+        print()
         print("Cleaning up...")
-        renderer.kill()
-        if not args.skip_upscaler:
+        # Try to gracefully close the processes
+        if renderer.poll() is None:
+            close_by_pid(renderer.pid)
+
+        if not args.skip_upscaler and upscaler.poll() is None:
+            close_by_pid(upscaler.pid)
+
+        # Wait for the processes to close
+        start_time = time.time()
+        while (
+            renderer.poll() is None
+            or (not args.skip_upscaler and upscaler.poll() is None)
+        ) and time.time() - start_time < 10:
+            time.sleep(0.1)
+
+        # Kill the processes if they are still running
+        if renderer.poll() is None:
+            renderer.kill()
+
+        if not args.skip_upscaler and upscaler.poll() is None:
             upscaler.kill()
+
         sys.exit(0)
 
     signal.signal(signal.SIGINT, cleanup)
@@ -255,9 +309,10 @@ if __name__ == "__main__":
     # Set focus to the upscaler
     if not args.skip_upscaler:
         time.sleep(2)
-        set_focus_by_pid(upscaler.pid)
+        assert focus_by_pid(upscaler.pid)
 
     dots = 0
+    test_start_time = time.time()
     while True:
         # Check if the renderer is still running
         if renderer.poll() is not None:
@@ -265,6 +320,10 @@ if __name__ == "__main__":
 
         # Check if the upscaler is still running
         if not args.skip_upscaler and upscaler.poll() is not None:
+            break
+
+        # Check if the benchmark time has passed
+        if args.benchmark > 0 and time.time() - test_start_time > args.benchmark:
             break
 
         print(

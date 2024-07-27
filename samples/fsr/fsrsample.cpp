@@ -108,10 +108,6 @@ void FSRSample::ParseSampleConfig()
     // Get the correct render module overrides
     configData["RenderModuleOverrides"] = remoteConfig["RenderModuleOverrides"][opMode];
 
-    // Remove content if we are in upscaler mode
-    if (m_OperationMode == OperationMode::Upscaler)
-        configData.erase("Content");
-
     // Set the startup upscaler method
     m_UIMethod = remoteConfig["StartupConfiguration"]["Upscaler"].get<UpscaleMethod>();
 

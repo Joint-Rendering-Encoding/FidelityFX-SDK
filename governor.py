@@ -89,6 +89,9 @@ def get_config(mode, opts):
             "TargetFPS"
         ] = 60  # We always run the upscaler at 60 FPS
 
+    # Set the scene exposure
+    tmp["FidelityFX FSR"]["Content"]["SceneExposure"] = opts.scene_exposure
+
     # Apply scene settings
     if opts.scene == "Sponza":
         tmp["FidelityFX FSR"]["Content"]["Scenes"] = [
@@ -112,6 +115,13 @@ def get_config(mode, opts):
         tmp["FidelityFX FSR"]["Remote"]["RenderModules"]["Renderer"].remove(
             "AnimatedTexturesRenderModule"
         )
+
+    # Remove content on upscaler if running in detached mode
+    if mode == "Upscaler":
+        del tmp["FidelityFX FSR"]["Content"]["Scenes"]
+        del tmp["FidelityFX FSR"]["Content"]["Camera"]
+        del tmp["FidelityFX FSR"]["Content"]["DiffuseIBL"]
+        del tmp["FidelityFX FSR"]["Content"]["SpecularIBL"]
 
     # Apply upscaler settings
     tmp["FidelityFX FSR"]["Remote"]["StartupConfiguration"] = {
@@ -186,6 +196,12 @@ def parse_args():
         default="Sponza",
         choices=["Sponza", "Brutalism"],
         help="Scene to use",
+    )
+    parser.add_argument(
+        "--scene-exposure",
+        type=float,
+        default=1.355,
+        help="Scene exposure",
     )
     parser.add_argument(
         "--upscaler",

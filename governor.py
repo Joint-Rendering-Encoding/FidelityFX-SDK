@@ -6,6 +6,7 @@ import time
 import signal
 import argparse
 import subprocess
+from glob import glob
 from datetime import datetime, timezone
 
 # Windows specific imports
@@ -14,6 +15,14 @@ import win32api
 import win32process
 import win32con
 import ctypes
+
+# Other
+from skimage import img_as_float, io
+from skimage.metrics import (
+    peak_signal_noise_ratio,
+    structural_similarity,
+    mean_squared_error,
+)
 
 __doc__ = """
 This script is used to run FSR tests. It starts the renderer and upscaler processes
@@ -56,15 +65,15 @@ def utcnow_iso8601():
 
 
 # Prepare the config
-def get_config(mode, args):
+def get_config(mode, opts):
     tmp = copy.deepcopy(config)
 
     # Apply mode specific settings
     tmp["FidelityFX FSR"]["Remote"]["Mode"] = mode
 
     # Apply present resolution settings
-    tmp["FidelityFX FSR"]["Presentation"]["Width"] = args.present_res[0]
-    tmp["FidelityFX FSR"]["Presentation"]["Height"] = args.present_res[1]
+    tmp["FidelityFX FSR"]["Presentation"]["Width"] = opts.present_res[0]
+    tmp["FidelityFX FSR"]["Presentation"]["Height"] = opts.present_res[1]
 
     # Apply FPS settings
     tmp["FidelityFX FSR"]["FPSLimiter"]["UseReflex"] = False  # Not operational
@@ -73,20 +82,20 @@ def get_config(mode, args):
     ] = False  # Messes with GPU metrics
 
     if mode != "Upscaler":
-        assert args.fps == 60 or args.fps == 30, "FPS must be 60 or 30"
-        tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = args.fps
+        assert opts.fps == 60 or opts.fps == 30, "FPS must be 60 or 30"
+        tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = opts.fps
     else:
         tmp["FidelityFX FSR"]["FPSLimiter"][
             "TargetFPS"
         ] = 60  # We always run the upscaler at 60 FPS
 
     # Apply scene settings
-    if args.scene == "Sponza":
+    if opts.scene == "Sponza":
         tmp["FidelityFX FSR"]["Content"]["Scenes"] = [
             "../media/SponzaNew/MainSponza.gltf"
         ]
         tmp["FidelityFX FSR"]["Content"]["Camera"] = "PhysCamera003"
-    elif args.scene == "Brutalism":
+    elif opts.scene == "Brutalism":
         tmp["FidelityFX FSR"]["Content"]["Scenes"] = [
             "../media/Brutalism/BrutalistHall.gltf"
         ]
@@ -95,7 +104,7 @@ def get_config(mode, args):
         raise ValueError("Invalid scene")
 
     # Apply reduced motion settings
-    if args.reduced_motion:
+    if opts.reduced_motion:
         tmp["FidelityFX FSR"]["Content"]["ParticleSpawners"] = []
         tmp["FidelityFX FSR"]["Remote"]["RenderModules"]["Default"].remove(
             "AnimatedTexturesRenderModule"
@@ -106,28 +115,28 @@ def get_config(mode, args):
 
     # Apply upscaler settings
     tmp["FidelityFX FSR"]["Remote"]["StartupConfiguration"] = {
-        "Upscaler": UPSCALERS.index(args.upscaler),
-        "RenderWidth": args.render_res[0],
-        "RenderHeight": args.render_res[1],
+        "Upscaler": UPSCALERS.index(opts.upscaler),
+        "RenderWidth": opts.render_res[0],
+        "RenderHeight": opts.render_res[1],
     }
 
     # Apply DLSS settings
-    if "DLSS" in args.upscaler:
+    if "DLSS" in opts.upscaler:
         tmp["FidelityFX FSR"]["Remote"]["RenderModuleOverrides"]["Default"][
             "DLSSUpscaleRenderModule"
-        ]["mode"] = (DLSS_MODES.index(args.dlssMode) + 1)
+        ]["mode"] = (DLSS_MODES.index(opts.dlssMode) + 1)
         tmp["FidelityFX FSR"]["Remote"]["RenderModuleOverrides"]["Upscaler"][
             "DLSSUpscaleRenderModule"
-        ]["mode"] = (DLSS_MODES.index(args.dlssMode) + 1)
+        ]["mode"] = (DLSS_MODES.index(opts.dlssMode) + 1)
 
     return tmp
 
 
-def apply_config(config):
+def apply_config(config_data):
     with open(
         os.path.join(FSR_DIR, "configs/fsrconfig.json"), "w", encoding="utf-8"
-    ) as f:
-        json.dump(config, f, indent=4)
+    ) as config_file:
+        json.dump(config_data, config_file, indent=4)
 
 
 def parse_args():
@@ -203,6 +212,25 @@ def parse_args():
         default=False,
         help="Enable structured logs",
     )
+    parser.add_argument(
+        "--compare",
+        type=str,
+        choices=["ssim", "psnr", "mse"],
+        help="Enable comparison with the reference image, will run the same configuration but without upscaler",
+    )
+    parser.add_argument(
+        "--switch-default-mode",
+        action="store_true",
+        default=False,
+        help="In compare mode, switch the default mode when running the reference image",
+    )
+    parser.add_argument(
+        "--compare-with",
+        type=str,
+        help="Compare with the given upscaler",
+        default="Native",
+        choices=UPSCALERS,
+    )
     return parser.parse_args()
 
 
@@ -237,9 +265,7 @@ def close_by_pid(pid):
     return False
 
 
-if __name__ == "__main__":
-    args = parse_args()
-
+def main(opts):
     # Default process arguments
     process_args = [
         "-screenshot",
@@ -249,9 +275,21 @@ if __name__ == "__main__":
         "json",
     ]
 
+    # For Native rendering, match the render resolution to the present resolution
+    if opts.upscaler == "Native":
+        if opts.render_res != opts.present_res:
+            if opts.structured_logs:
+                raise ValueError(
+                    "Native rendering is enabled, but the render resolution does not match the present resolution."
+                )
+            print(
+                "Warning: Native rendering is enabled, but the render resolution does not match the present resolution. The render resolution will be set to the present resolution."
+            )
+            opts.render_res = opts.present_res
+
     # Create the renderer process
-    mode = "Default" if args.use_default else "Renderer"
-    renderer_config = get_config(mode, args)
+    mode = "Default" if opts.use_default else "Renderer"
+    renderer_config = get_config(mode, opts)
     apply_config(renderer_config)
     renderer = subprocess.Popen(
         [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe"), *process_args],
@@ -260,26 +298,26 @@ if __name__ == "__main__":
         stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL,
     )
-    if args.structured_logs:
+    if opts.structured_logs:
         print("RENDERER_PID", renderer.pid)
     else:
         print(f"Renderer PID: {renderer.pid}")
 
     # Default mode implies skipping the upscaler
-    if args.use_default:
-        args.skip_upscaler = True
+    if opts.use_default:
+        opts.skip_upscaler = True
 
     # Wait until the renderer is ready
-    if not args.use_default:
+    if not opts.use_default:
         time.sleep(2)
 
         # Create the upscaler process
-        upscaler_config = get_config("Upscaler", args)
+        upscaler_config = get_config("Upscaler", opts)
         apply_config(upscaler_config)
         # We do not encapsulate config creation in the following
         # if statement because we may use Visual Studio to debug the upscaler
 
-    if not args.skip_upscaler:
+    if not opts.skip_upscaler:
         upscaler = subprocess.Popen(
             [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe"), *process_args],
             cwd=FSR_DIR,
@@ -287,14 +325,14 @@ if __name__ == "__main__":
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
         )
-        if args.structured_logs:
+        if opts.structured_logs:
             print("UPSCALER_PID", upscaler.pid)
         else:
             print(f"Upscaler PID: {upscaler.pid}")
 
     # Register signal handlers
-    def cleanup(sig, frame):
-        if not args.structured_logs:
+    def cleanup(sig, _):
+        if not opts.structured_logs:
             print()
             print("Cleaning up...")
 
@@ -302,14 +340,14 @@ if __name__ == "__main__":
         if renderer.poll() is None:
             close_by_pid(renderer.pid)
 
-        if not args.skip_upscaler and upscaler.poll() is None:
+        if not opts.skip_upscaler and upscaler.poll() is None:
             close_by_pid(upscaler.pid)
 
         # Wait for the processes to close
         start_time = time.time()
         while (
             renderer.poll() is None
-            or (not args.skip_upscaler and upscaler.poll() is None)
+            or (not opts.skip_upscaler and upscaler.poll() is None)
         ) and time.time() - start_time < 10:
             time.sleep(0.1)
 
@@ -317,22 +355,30 @@ if __name__ == "__main__":
         if renderer.poll() is None:
             renderer.kill()
 
-        if not args.skip_upscaler and upscaler.poll() is None:
+        if not opts.skip_upscaler and upscaler.poll() is None:
             upscaler.kill()
 
-        sys.exit(0)
+        if not opts.compare:
+            sys.exit(0)
+
+        if opts.compare and sig is not None:
+            print(
+                "In comparison mode, exiting is not allowed. You must wait for the test to finish."
+            )
 
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
-    # Set focus to the upscaler
-    if not args.skip_upscaler:
+    # Focus the correct window
+    if not opts.skip_upscaler:
         time.sleep(2)
-        assert focus_by_pid(upscaler.pid)
+        assert focus_by_pid(
+            renderer.pid if opts.use_default else upscaler.pid
+        ), "Could not focus the window"
 
     dots = 0
     test_start_time = time.time()
-    if args.structured_logs:
+    if opts.structured_logs:
         print("TEST_START", utcnow_iso8601())
     while True:
         # Check if the renderer is still running
@@ -340,14 +386,14 @@ if __name__ == "__main__":
             break
 
         # Check if the upscaler is still running
-        if not args.skip_upscaler and upscaler.poll() is not None:
+        if not opts.skip_upscaler and upscaler.poll() is not None:
             break
 
         # Check if the benchmark time has passed
-        if args.benchmark > 0 and time.time() - test_start_time > args.benchmark:
+        if opts.benchmark > 0 and time.time() - test_start_time > opts.benchmark:
             break
 
-        if not args.structured_logs:
+        if not opts.structured_logs:
             print(
                 f"Waiting for process(es) to finish{'.' * dots + ' ' * (4 - dots)}",
                 end="\r",
@@ -355,9 +401,53 @@ if __name__ == "__main__":
             dots = (dots + 1) % 4
         time.sleep(0.5)
 
-    if args.structured_logs:
+    if opts.structured_logs:
         print("TEST_END", utcnow_iso8601())
     else:
         print()
         print("Process(es) finished")
     cleanup(None, None)
+
+    return renderer.pid if opts.use_default else upscaler.pid
+
+
+def load_image_for_pid(pid):
+    image_path = glob(os.path.join(FSR_DIR, "benchmark", f"*_{pid}_*.jpg"))
+    assert len(image_path) == 1, "Could not find the image"
+    return img_as_float(io.imread(image_path[0]))
+
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    if args.benchmark > 0:
+        assert args.benchmark >= 5, "Benchmark duration must be at least 5 seconds"
+
+    # Run with the requested arguments
+    test_pid = main(args)
+
+    if args.compare:
+        # Run the same configuration without the upscaler
+        compare_args = parse_args()
+        compare_args.upscaler = args.compare_with
+        if compare_args.switch_default_mode:
+            compare_args.use_default = not args.use_default
+        ref_pid = main(compare_args)
+
+        # Load the images
+        test_image = load_image_for_pid(test_pid)
+        ref_image = load_image_for_pid(ref_pid)
+
+        # Calculate the metrics
+        if args.compare == "ssim":
+            metric = structural_similarity(
+                test_image, ref_image, data_range=1, channel_axis=2
+            )
+        elif args.compare == "psnr":
+            metric = peak_signal_noise_ratio(test_image, ref_image, data_range=1)
+        elif args.compare == "mse":
+            metric = mean_squared_error(test_image, ref_image)
+        else:
+            raise ValueError("Invalid metric")
+
+        print(f"{args.compare.upper()}: {metric:.6f}")

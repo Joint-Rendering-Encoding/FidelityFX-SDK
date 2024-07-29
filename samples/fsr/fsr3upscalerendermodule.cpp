@@ -403,10 +403,6 @@ void FSR3UpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
 void FSR3UpscaleRenderModule::PreTransCallback(double deltaTime, cauldron::CommandList* pCmdList)
 {
-#ifdef FSR_REMOTE_DIRTY_TRANSLUENCY_FIX
-    return;  // Sending opaque texture would require some changes and the end result doesn't change that much anyway.
-#endif
-
     GPUScopedProfileCapture sampleMarker(pCmdList, L"Pre-Trans (FSR3)");
 
     std::vector<Barrier> barriers;
@@ -434,8 +430,7 @@ void FSR3UpscaleRenderModule::PreTransCallback(double deltaTime, cauldron::Comma
 
     if (m_MaskMode != FSR3MaskMode::Auto)
         return;
-
-    
+        
     // Copy the color render target before we apply translucency
     {
         barriers.clear();

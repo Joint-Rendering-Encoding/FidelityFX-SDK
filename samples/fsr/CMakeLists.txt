@@ -100,9 +100,6 @@ addManifest(${PROJECT_NAME})
 # Add compile definitions to identify the sample
 target_compile_definitions(${PROJECT_NAME} PRIVATE SampleName=L"FidelityFX FSR" SampleInclude=fsr)
 
-# Add dirty flags
-target_compile_definitions(${PROJECT_NAME} PRIVATE FSR_REMOTE_DIRTY_TRANSLUENCY_FIX=1)
-
 # Link the correct backend in
 if (FFX_API STREQUAL CAULDRON)
 	target_link_libraries(${PROJECT_NAME} LINK_PUBLIC ffx_backend_cauldron_${FFX_PLATFORM_NAME})

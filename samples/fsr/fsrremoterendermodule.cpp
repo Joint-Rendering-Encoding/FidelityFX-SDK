@@ -124,7 +124,7 @@ void FSRRemoteRenderModule::InboundDataTransfer(double deltaTime, CommandList* p
     m_DX12Ops->TransferFromSharedBuffer(getFSRResources(), m_BufferIndex, pCmdList);
 
     // Increase the buffer index
-    m_BufferIndex = (m_BufferIndex + 1) % FSR_BUFFER_COUNT;
+    m_BufferIndex = (m_BufferIndex + 1) % FSR_REMOTE_SHARED_BUFFER_COUNT;
 }
 
 void FSRRemoteRenderModule::OutboundDataTransfer(double deltaTime, CommandList* pCmdList)
@@ -136,5 +136,5 @@ void FSRRemoteRenderModule::OutboundDataTransfer(double deltaTime, CommandList* 
     m_DX12Ops->TransferToSharedBuffer(getFSRResources(), m_BufferIndex, pCmdList);
 
     // Increase the buffer index
-    m_BufferIndex = (m_BufferIndex + 1) % FSR_BUFFER_COUNT;
+    m_BufferIndex = (m_BufferIndex + 1) % FSR_REMOTE_SHARED_BUFFER_COUNT;
 }

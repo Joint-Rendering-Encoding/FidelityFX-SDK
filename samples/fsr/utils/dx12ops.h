@@ -6,9 +6,6 @@
 using namespace cauldron;
 using namespace common;
 
-#define FSR_BUFFER_COUNT     10
-#define FSR_BUFFER_NAMESPACE L"FSR_REMOTE_SHARED_BUFFER"
-
 class DX12Ops
 {
 public:
@@ -16,7 +13,7 @@ public:
 
     ~DX12Ops()
     {
-        for (size_t i = 0; i < FSR_BUFFER_COUNT; i++)
+        for (size_t i = 0; i < FSR_REMOTE_SHARED_BUFFER_COUNT; i++)
         {
             ID3D12Resource* pResource = std::get<0>(p_SharedBuffer[i]);
             ID3D12Fence*    pFence    = std::get<1>(p_SharedBuffer[i]);
@@ -58,7 +55,7 @@ public:
     }
 
 private:
-    std::tuple<ID3D12Resource*, ID3D12Fence*> p_SharedBuffer[FSR_BUFFER_COUNT];
+    std::tuple<ID3D12Resource*, ID3D12Fence*> p_SharedBuffer[FSR_REMOTE_SHARED_BUFFER_COUNT];
 
     size_t CalculateTotalSize(FSRResources pResources);
 

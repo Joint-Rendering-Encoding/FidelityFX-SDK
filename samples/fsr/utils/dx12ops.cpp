@@ -20,12 +20,12 @@ void DX12Ops::CreateSharedBuffers(FSRResources pResources, bool shouldCreate)
 {
     ID3D12Device* pDevice = GetDevice()->GetImpl()->DX12Device();
 
-    for (size_t i = 0; i < FSR_BUFFER_COUNT; i++)
+    for (size_t i = 0; i < FSR_REMOTE_SHARED_BUFFER_COUNT; i++)
     {
         ID3D12Resource* pResource    = nullptr;
         ID3D12Fence*    pFence       = nullptr;
-        std::wstring    resourceName = FSR_BUFFER_NAMESPACE + std::to_wstring(i) + L"_RESOURCE";
-        std::wstring    fenceName    = FSR_BUFFER_NAMESPACE + std::to_wstring(i) + L"_FENCE";
+        std::wstring    resourceName = GetFramework()->GetName() + std::to_wstring(i) + L"_RESOURCE";
+        std::wstring    fenceName    = GetFramework()->GetName() + std::to_wstring(i) + L"_FENCE";
 
         if (shouldCreate)
         {

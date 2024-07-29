@@ -48,6 +48,9 @@ set(SHADER_OUTPUT ${BIN_OUTPUT}/shaders)
 set(CONFIG_OUTPUT ${BIN_OUTPUT}/configs)
 set(RENDERMODULE_MEDIA_OUTPUT ${BIN_OUTPUT}/media/rendermodule)
 
+# Set the shared buffer count. Both CPU and GPU will use this buffer count
+add_compile_definitions(FSR_REMOTE_SHARED_BUFFER_COUNT=10)
+
 # Set top level includes (all projects will need these to some extent)
 include_directories(${CAULDRON_ROOT}/framework/inc)
 include_directories(${CAULDRON_ROOT}/framework/libs)

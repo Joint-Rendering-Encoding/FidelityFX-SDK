@@ -251,6 +251,14 @@ namespace cauldron
         const float GetFovY() const { return m_pData->Perspective.Yfov; }
 
         /**
+         * @brief   Gets the camera's jitter values. Used for upscaling.
+         */
+        const Vec2 GetJitter(uint32_t renderWidth, uint32_t renderHeight)
+        {
+            return Vec2(m_jitterValues.getX() * renderWidth / -2.f, m_jitterValues.getY() * renderHeight / 2.f);
+        }
+
+        /**
          * @brief   Sets the camera's jitter update callback to use.
          */
         static void SetJitterCallbackFunc(CameraJitterCallback callbackFunc) { s_pSetJitterCallback = callbackFunc; }

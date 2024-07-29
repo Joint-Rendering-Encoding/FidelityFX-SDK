@@ -32,10 +32,14 @@
 
 #include <sl.h>
 
+// For common jitter helper functions
+#include <FidelityFX/host/ffx_fsr3.h>
+
 #include "rendermoduleregistry.h"
 #include "taa/taarendermodule.h"
 #include "translucency/translucencyrendermodule.h"
 #include "render/rendermodules/ui/uirendermodule.h"
+#include "core/components/cameracomponent.h"
 
 #include "misc/fileio.h"
 #include "render/device.h"
@@ -168,6 +172,24 @@ int32_t FSRSample::DoSampleInit()
     // Initialize the remote render module
     m_pFSRRemoteRenderModule = static_cast<FSRRemoteRenderModule*>(GetFramework()->GetRenderModule("FSRRemoteRenderModule"));
     CauldronAssert(ASSERT_CRITICAL, m_pFSRRemoteRenderModule, L"FidelityFX FSR Sample: Error: Could not find FSRRemote render module.");
+
+    // If we have the renderer capability, register the jitter callback
+    if (GetConfig()->EnableJitter)
+    {
+        CameraJitterCallback jitterCallback = [this](Vec2& values) {
+            // Increment jitter index for frame
+            ++m_JitterIndex;
+
+            // Update FSR3 jitter for built in TAA
+            const ResolutionInfo& resInfo          = GetFramework()->GetResolutionInfo();
+            const int32_t         jitterPhaseCount = ffxFsr3GetJitterPhaseCount(resInfo.RenderWidth, resInfo.DisplayWidth);
+            float                 m_JitterX, m_JitterY;
+            ffxFsr3GetJitterOffset(&m_JitterX, &m_JitterY, m_JitterIndex, jitterPhaseCount);
+
+            values = Vec2(-2.f * m_JitterX / resInfo.RenderWidth, 2.f * m_JitterY / resInfo.RenderHeight);
+        };
+        CameraComponent::SetJitterCallbackFunc(jitterCallback);
+    }
 
     // Rest is only needed if we are in Upscaler mode
     if ((m_OperationMode & OperationMode::Upscaler) != OperationMode::Upscaler)
@@ -330,6 +352,11 @@ void FSRSample::DoSampleUpdates(double deltaTime)
         m_Method = m_UIMethod;
         SwitchUpscaler(m_UIMethod);
     }
+}
+
+void FSRSample::DoSampleResize(const ResolutionInfo& resInfo)
+{
+    m_JitterIndex = 0;
 }
 
 void FSRSample::DoSampleShutdown()

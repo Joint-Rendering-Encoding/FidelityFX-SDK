@@ -119,6 +119,9 @@ namespace cauldron
         bool RT_1_1 : 1;
         bool FP16 : 1;
 
+        // Render
+        bool EnableJitter : 1;
+
         // Presentation
         bool Vsync : 1;
         bool Fullscreen    : 1;

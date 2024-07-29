@@ -26,9 +26,6 @@
 #include "render/dynamicresourcepool.h"
 #include "core/scene.h"
 
-// We use this header for jitter stuff
-#include <FidelityFX/host/ffx_fsr3.h>
-
 #include <functional>
 
 using namespace cauldron;
@@ -136,20 +133,6 @@ void DLSSRenderModule::EnableModule(bool enabled)
         // Load DLSS-G
         res = slSetFeatureLoaded(sl::kFeatureDLSS_G, true);
         CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to load DLSS-G (%d)", res);
-
-        // Set the jitter callback to use
-        CameraJitterCallback jitterCallback = [this](Vec2& values) {
-            // Increment jitter index for frame
-            ++m_JitterIndex;
-
-            // Update FSR3 jitter for built in TAA
-            const ResolutionInfo& resInfo          = GetFramework()->GetResolutionInfo();
-            const int32_t         jitterPhaseCount = ffxFsr3GetJitterPhaseCount(resInfo.RenderWidth, resInfo.DisplayWidth);
-            ffxFsr3GetJitterOffset(&m_JitterX, &m_JitterY, m_JitterIndex, jitterPhaseCount);
-
-            values = Vec2(-2.f * m_JitterX / resInfo.RenderWidth, 2.f * m_JitterY / resInfo.RenderHeight);
-        };
-        CameraComponent::SetJitterCallbackFunc(jitterCallback);
     }
     else
     {
@@ -157,9 +140,6 @@ void DLSSRenderModule::EnableModule(bool enabled)
         // BUG: This doesn't really work, and we don't need it anyway as we don't change the upscalers during runtime
         // res = slSetFeatureLoaded(sl::kFeatureDLSS_G, false);
         // CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to unload DLSS-G (%d)", res);
-
-        // Reset jitter callback
-        CameraComponent::SetJitterCallbackFunc(nullptr);
     }
 
     GetFramework()->EnableFrameInterpolation(enabled);
@@ -211,7 +191,8 @@ void DLSSRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     // Provide common constants
     sl::Constants constants{};
     constants.mvecScale              = {1.0f / resInfo.RenderWidth, 1.0f / resInfo.RenderHeight};
-    constants.jitterOffset           = {-m_JitterX, -m_JitterY};
+    constants.jitterOffset           = {-pCamera->GetJitter(resInfo.RenderWidth, resInfo.RenderHeight).getX(),
+                                        -pCamera->GetJitter(resInfo.RenderWidth, resInfo.RenderHeight).getY()};
     constants.depthInverted          = GetConfig()->InvertedDepth ? sl::Boolean::eTrue : sl::Boolean::eFalse;
     constants.cameraPinholeOffset    = {0.0f, 0.0f};
     constants.reset                  = sl::Boolean::eFalse;

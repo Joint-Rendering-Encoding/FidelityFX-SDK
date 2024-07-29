@@ -168,12 +168,6 @@ void TAARenderModule::EnableModule(bool enabled)
 
     if (enabled)
     {
-        // Set the jitter callback to use 
-        CameraJitterCallback jitterCallback = [this](Vec2& values) {
-                values = CalculateJitterOffsets(m_pTAAOutputBuffer->GetDesc().Width, m_pTAAOutputBuffer->GetDesc().Height, s_Seed);
-            };
-        CameraComponent::SetJitterCallbackFunc(jitterCallback);
-
         /*Vec2 jitterValues = CalculateJitterOffsets(m_pTAAOutputBuffer->GetDesc().Width, m_pTAAOutputBuffer->GetDesc().Height, s_Seed);
         GetScene()->GetCurrentCamera()->SetJitterValues(jitterValues);*/
         m_bFirst = true;
@@ -183,8 +177,6 @@ void TAARenderModule::EnableModule(bool enabled)
     }
     else
     {
-        CameraComponent::SetJitterCallbackFunc(nullptr);
-        
         // Disable the UI
         GetUIManager()->UnRegisterUIElements(m_UISection);
     }

@@ -122,20 +122,6 @@ void FSR3UpscaleRenderModule::EnableModule(bool enabled)
         // Create the FSR3 context
         UpdateFSR3Context(true);
 
-        // Set the jitter callback to use
-        CameraJitterCallback jitterCallback = [this](Vec2& values) {
-            // Increment jitter index for frame
-            ++m_JitterIndex;
-
-            // Update FSR3 jitter for built in TAA
-            const ResolutionInfo& resInfo = GetFramework()->GetResolutionInfo();
-            const int32_t jitterPhaseCount = ffxFsr3GetJitterPhaseCount(resInfo.RenderWidth, resInfo.DisplayWidth);
-            ffxFsr3GetJitterOffset(&m_JitterX, &m_JitterY, m_JitterIndex, jitterPhaseCount);
-
-            values = Vec2(-2.f * m_JitterX / resInfo.RenderWidth, 2.f * m_JitterY / resInfo.RenderHeight);
-        };
-        CameraComponent::SetJitterCallbackFunc(jitterCallback);
-
         // ... and register UI elements for active upscaler
         GetUIManager()->RegisterUIElements(m_UISection);
     }
@@ -151,8 +137,6 @@ void FSR3UpscaleRenderModule::EnableModule(bool enabled)
 
         // Destroy the FidelityFX interface memory
         free(m_InitializationParameters.backendInterfaceUpscaling.scratchBuffer);
-
-        CameraComponent::SetJitterCallbackFunc(nullptr);
 
         // Deregister UI elements for inactive upscaler
         GetUIManager()->UnRegisterUIElements(m_UISection);
@@ -320,9 +304,6 @@ void FSR3UpscaleRenderModule::OnResize(const ResolutionInfo& resInfo)
     // Need to recreate the FSR3 context on resource resize
     UpdateFSR3Context(false);   // Destroy
     UpdateFSR3Context(true);    // Re-create
-
-    // Rest jitter index
-    m_JitterIndex = 0;
 }
 
 void FSR3UpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
@@ -359,8 +340,8 @@ void FSR3UpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     }
 
     // Jitter is calculated earlier in the frame using a callback from the camera update
-    dispatchParameters.jitterOffset.x         = -m_JitterX;
-    dispatchParameters.jitterOffset.y         = -m_JitterY;
+    dispatchParameters.jitterOffset.x         = -pCamera->GetJitter(resInfo.RenderWidth, resInfo.RenderHeight).getX();
+    dispatchParameters.jitterOffset.y         = -pCamera->GetJitter(resInfo.RenderWidth, resInfo.RenderHeight).getY();
     dispatchParameters.motionVectorScale.x    = resInfo.fRenderWidth();
     dispatchParameters.motionVectorScale.y    = resInfo.fRenderHeight();
     dispatchParameters.reset                  = false;

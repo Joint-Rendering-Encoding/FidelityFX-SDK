@@ -715,6 +715,13 @@ namespace cauldron
             m_Config.MinShaderModel = featuresConfig.value<ShaderModel>("ShaderModel", m_Config.MinShaderModel);
         }
 
+        // Initialize render configuration
+        if (configData.find("Render") != configData.end())
+        {
+            json renderConfig            = configData["Render"];
+            m_Config.EnableJitter        = renderConfig.value("EnableJitter", m_Config.EnableJitter);
+        }
+
         // Initialize presentation configuration
         if (configData.find("Presentation") != configData.end())
         {

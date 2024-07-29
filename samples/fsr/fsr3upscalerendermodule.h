@@ -137,9 +137,6 @@ private:
     float           m_MipBias       = cMipBias[static_cast<uint32_t>(FSR3ScalePreset::Quality)];
     FSR3MaskMode    m_MaskMode      = FSR3MaskMode::Auto;
     float           m_Sharpness     = 0.8f;
-    uint32_t        m_JitterIndex   = 0;
-    float           m_JitterX       = 0.f;
-    float           m_JitterY       = 0.f;
 
     bool m_UpscaleRatioEnabled  = false;
     bool m_UseMask              = false;

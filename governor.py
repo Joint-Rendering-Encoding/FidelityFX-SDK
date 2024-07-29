@@ -46,6 +46,9 @@ UPSCALERS = [
     "DLSS",
 ]
 
+# List of upscalers that require jitter, otherwise it should be disabled
+NEEDS_JITTER = ["FSR2", "FSR3Upscale", "FSR3", "DLSSUpscale", "DLSS"]
+
 DLSS_MODES = [
     "Performance",
     "Balanced",
@@ -124,10 +127,13 @@ def get_config(mode, opts):
         del tmp["FidelityFX FSR"]["Content"]["SpecularIBL"]
 
     # Apply upscaler settings
-    tmp["FidelityFX FSR"]["Remote"]["StartupConfiguration"] = {
-        "Upscaler": UPSCALERS.index(opts.upscaler),
-        "RenderWidth": opts.render_res[0],
-        "RenderHeight": opts.render_res[1],
+    tmp["FidelityFX FSR"]["Remote"]["Upscaler"] = UPSCALERS.index(opts.upscaler)
+
+    # Apply render settings
+    tmp["FidelityFX FSR"]["Render"] = {
+        "EnableJitter": opts.upscaler in NEEDS_JITTER,
+        "InitialRenderWidth": opts.render_res[0],
+        "InitialRenderHeight": opts.render_res[1],
     }
 
     # Apply DLSS settings

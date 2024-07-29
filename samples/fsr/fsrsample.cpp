@@ -40,6 +40,7 @@
 #include "translucency/translucencyrendermodule.h"
 #include "render/rendermodules/ui/uirendermodule.h"
 #include "core/components/cameracomponent.h"
+#include "core/scene.h"
 
 #include "misc/fileio.h"
 #include "render/device.h"
@@ -328,7 +329,12 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
 
 void FSRSample::DoSampleUpdates(double deltaTime)
 {
-    // Only needed if we are in Upscaler mode
+    // Update the MIP bias here instead of in each upscaler render module
+    const ResolutionInfo& resInfo       = GetResolutionInfo();
+    float                 upscaleFactor = std::max(resInfo.GetDisplayWidthScaleRatio(), resInfo.GetDisplayHeightScaleRatio());
+    GetScene()->SetMipLODBias(CalculateMipBias(upscaleFactor));
+
+    // Rest is only needed if we are in Upscaler mode
     if (!HasCapability(FrameworkCapability::Upscaler))
         return;
 

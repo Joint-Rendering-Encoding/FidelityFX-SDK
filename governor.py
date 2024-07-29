@@ -297,6 +297,7 @@ def main(opts):
         "DISPLAYMODE_LDR",
         "-benchmark",
         "json",
+        f"duration={opts.benchmark * opts.fps}" if opts.benchmark > 0 else "",
     ]
 
     # For Native rendering, match the render resolution to the present resolution
@@ -383,7 +384,12 @@ def main(opts):
             upscaler.kill()
 
         if not opts.compare:
-            sys.exit(0)
+            if renderer.returncode != 0 or (
+                not opts.skip_upscaler and upscaler.returncode != 0
+            ):
+                sys.exit(1)
+            else:
+                sys.exit(0)
 
         if opts.compare and sig is not None:
             print(
@@ -401,7 +407,6 @@ def main(opts):
         ), "Could not focus the window"
 
     dots = 0
-    test_start_time = time.time()
     if opts.structured_logs:
         print("TEST_START", utcnow_iso8601())
     while True:
@@ -411,10 +416,6 @@ def main(opts):
 
         # Check if the upscaler is still running
         if not opts.skip_upscaler and upscaler.poll() is not None:
-            break
-
-        # Check if the benchmark time has passed
-        if opts.benchmark > 0 and time.time() - test_start_time > opts.benchmark:
             break
 
         if not opts.structured_logs:

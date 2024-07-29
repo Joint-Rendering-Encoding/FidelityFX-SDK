@@ -17,6 +17,8 @@ import win32con
 import ctypes
 
 # Other
+import numpy as np
+import matplotlib.pyplot as plt
 from skimage import img_as_float, io
 from skimage.metrics import (
     peak_signal_noise_ratio,
@@ -473,3 +475,14 @@ if __name__ == "__main__":
             raise ValueError("Invalid metric")
 
         print(f"{args.compare.upper()}: {metric:.6f}")
+
+        # Calculate the difference image
+        diff = np.abs(test_image - ref_image)
+        ref_image[diff > 0.02] = 1
+
+        # Show the difference
+        fig, ax = plt.subplots(figsize=(16 * 1.5, 9 * 1.5))
+        ax.imshow(ref_image)
+        plt.title(f"{args.compare.upper()} = {metric:.6f}")
+        fig.tight_layout()
+        plt.show()

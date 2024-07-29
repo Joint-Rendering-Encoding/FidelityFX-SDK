@@ -46,14 +46,6 @@ class cauldron::RenderModule;
 /// @ingroup FfxFsrSample
 /// @{
 
-enum class OperationMode
-{
-    Renderer = 1,
-    Upscaler,
-    Default
-};
-DEFINE_ENUM_FLAG_OPERATORS(OperationMode);
-
 /**
  * @class FSRSample
  *

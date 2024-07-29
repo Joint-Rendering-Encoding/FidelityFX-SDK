@@ -720,6 +720,8 @@ namespace cauldron
         {
             json renderConfig            = configData["Render"];
             m_Config.EnableJitter        = renderConfig.value("EnableJitter", m_Config.EnableJitter);
+            m_Config.InitialRenderWidth  = renderConfig.value<uint32_t>("InitialRenderWidth", m_Config.InitialRenderWidth);
+            m_Config.InitialRenderHeight = renderConfig.value<uint32_t>("InitialRenderHeight", m_Config.InitialRenderHeight);
         }
 
         // Initialize presentation configuration

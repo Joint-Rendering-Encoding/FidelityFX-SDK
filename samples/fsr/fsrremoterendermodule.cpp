@@ -17,8 +17,9 @@ void FSRRemoteRenderModule::Init(const json& initData)
     // Resource setup
 
     // Check remote mode
-    m_UpscalerModeEnabled = initData.value("Mode", "Renderer") == "Upscaler";
-    m_OnlyResizing        = initData.value("Mode", "Renderer") == "Default";
+    m_UpscalerModeEnabled = GetFramework()->IsOnlyCapability(FrameworkCapability::Upscaler);
+    m_RendererModeEnabled = GetFramework()->IsOnlyCapability(FrameworkCapability::Renderer);
+    m_OnlyResizing        = GetFramework()->HasCapability(FrameworkCapability::Renderer | FrameworkCapability::Upscaler);
 
     // Fetch needed resources
     if (!m_OnlyResizing)
@@ -33,7 +34,7 @@ void FSRRemoteRenderModule::Init(const json& initData)
     }
 
     // Upscaler mode is first in line by RenderModules order, but Renderer mode needs to be put in before SwapChainRenderModule explicitly
-    if (!m_UpscalerModeEnabled && !m_OnlyResizing)
+    if (m_RendererModeEnabled)
     {
         // Register the outbound data transfer callback
         ExecuteCallback callbackPreSwap      = std::bind(&FSRRemoteRenderModule::OutboundDataTransfer, this, std::placeholders::_1, std::placeholders::_2);
@@ -59,8 +60,8 @@ void FSRRemoteRenderModule::Init(const json& initData)
     }
 
     // On Renderer, enable upscaling
-    m_RenderWidth  = initData.value("RenderWidth", 2560);
-    m_RenderHeight = initData.value("RenderHeight", 1440);
+    m_RenderWidth  = GetConfig()->InitialRenderWidth;
+    m_RenderHeight = GetConfig()->InitialRenderHeight;
     if (!m_UpscalerModeEnabled || m_OnlyResizing)
     {
         GetFramework()->EnableUpscaling(true, [&](uint32_t displayWidth, uint32_t displayHeight) {
@@ -110,32 +111,30 @@ void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     if (m_UpscalerModeEnabled)
         return InboundDataTransfer(deltaTime, pCmdList);
 
-    // Workaround to supress warnings from the framework
+    // Workaround to supress warnings from the framework (only in renderer mode)
     GetFramework()->SetUpscalingState(UpscalerState::PostUpscale);
 }
 
 void FSRRemoteRenderModule::InboundDataTransfer(double deltaTime, CommandList* pCmdList)
 {
+    GPUScopedProfileCapture sampleMarker(pCmdList, L"FSR Remote (Inbound)");
+
     // Main loop never runs if there is no available buffer, so we can assume next buffer is in READY state
     // Transfer the resources from the shared buffer to this process
     m_DX12Ops->TransferFromSharedBuffer(getFSRResources(), m_BufferIndex, pCmdList);
 
     // Increase the buffer index
     m_BufferIndex = (m_BufferIndex + 1) % FSR_BUFFER_COUNT;
-
-    // FidelityFX contexts modify the set resource view heaps, so set the cauldron one back
-    SetAllResourceViewHeaps(pCmdList);
 }
 
 void FSRRemoteRenderModule::OutboundDataTransfer(double deltaTime, CommandList* pCmdList)
 {
+    GPUScopedProfileCapture sampleMarker(pCmdList, L"FSR Remote (Outbound)");
+
     // Main loop never runs if there is no available buffer, so we can assume next buffer is in IDLE state
     // Transfer the resources from this process to the shared buffer
     m_DX12Ops->TransferToSharedBuffer(getFSRResources(), m_BufferIndex, pCmdList);
 
     // Increase the buffer index
     m_BufferIndex = (m_BufferIndex + 1) % FSR_BUFFER_COUNT;
-
-    // FidelityFX contexts modify the set resource view heaps, so set the cauldron one back
-    SetAllResourceViewHeaps(pCmdList);
 }

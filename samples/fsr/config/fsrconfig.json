@@ -40,12 +40,8 @@
         },
 
         "Remote": {
-            "Mode": "Renderer",
-            "StartupConfiguration": {
-                "Upscaler": 7,
-                "RenderWidth": 1920,
-                "RenderHeight": 1080
-            },
+            "Mode": "Default",
+            "Upscaler": 6,
             "RenderModules": {
                 "Default": [
                     "SkyDomeRenderModule",
@@ -194,13 +190,22 @@
             ]
         },
 
+        "DebugOptions": {
+            "DevelopmentMode": false,
+            "DebugShaders": false,
+            "EnableRenderDocCapture": false,
+            "EnablePixCapture": false
+        },
+
         "Validation": {
             "CpuValidationLayerEnabled": false,
             "GpuValidationLayerEnabled": false
         },
 
         "Render": {
-            "EnableJitter": true
+            "EnableJitter": true,
+            "InitialRenderWidth": 1280,
+            "InitialRenderHeight": 720
         },
 
         "Presentation": {
@@ -213,7 +218,7 @@
 
         "FPSLimiter": {
             "Enable": true,
-            "UseGPULimiter": true,
+            "UseGPULimiter": false,
             "TargetFPS": 60
         }
     }

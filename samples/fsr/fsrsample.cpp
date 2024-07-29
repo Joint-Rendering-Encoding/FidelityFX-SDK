@@ -49,7 +49,7 @@ using namespace cauldron;
 
 int32_t FSRSample::Init()
 {
-    if ((m_OperationMode & OperationMode::Upscaler) == OperationMode::Upscaler)
+    if (HasCapability(FrameworkCapability::Upscaler))
     {
         // Initialize Streamline SDK
         sl::Preferences pref{};
@@ -67,13 +67,13 @@ int32_t FSRSample::Init()
 
 void FSRSample::PostDeviceInit()
 {
-    if ((m_OperationMode & OperationMode::Upscaler) == OperationMode::Upscaler)
+    if (HasCapability(FrameworkCapability::Upscaler))
         slSetD3DDevice(GetDevice()->GetImpl()->DX12Device());
 }
 
 void FSRSample::Shutdown()
 {
-    if ((m_OperationMode & OperationMode::Upscaler) == OperationMode::Upscaler)
+    if (HasCapability(FrameworkCapability::Upscaler))
     {
         // Cleanup
         sl::Result res = slShutdown();
@@ -97,14 +97,18 @@ void FSRSample::ParseSampleConfig()
     // Parse remote related config
     json remoteConfig = configData["Remote"];
 
-    // Parse the remote config
+    // Parse the remote config for framework capabilities
+    FrameworkCapability capability = FrameworkCapability::None;
     std::string opMode = remoteConfig["Mode"];
+
     if (opMode == "Renderer")
-        m_OperationMode = OperationMode::Renderer;
+        capability |= FrameworkCapability::Renderer;
     else if (opMode == "Upscaler")
-        m_OperationMode = OperationMode::Upscaler;
+        capability |= FrameworkCapability::Upscaler;
     else
-        m_OperationMode = OperationMode::Default;
+        capability |= FrameworkCapability::Renderer | FrameworkCapability::Upscaler;
+
+    SetCapabilities(capability);
 
     // Get the correct render modules
     configData["RenderModules"] = remoteConfig["RenderModules"][opMode];
@@ -113,22 +117,7 @@ void FSRSample::ParseSampleConfig()
     configData["RenderModuleOverrides"] = remoteConfig["RenderModuleOverrides"][opMode];
 
     // Set the startup upscaler method
-    m_UIMethod = remoteConfig["StartupConfiguration"]["Upscaler"].get<UpscaleMethod>();
-
-    // Set FSRRemoteRenderModule specific options
-    json fsrrConfig;
-    fsrrConfig["Mode"]         = opMode;
-    fsrrConfig["RenderWidth"]  = remoteConfig["StartupConfiguration"]["RenderWidth"];
-    fsrrConfig["RenderHeight"] = remoteConfig["StartupConfiguration"]["RenderHeight"];
-
-    configData["RenderModuleOverrides"]["FSRRemoteRenderModule"] = fsrrConfig;
-
-    // Set the render width and height for the upscale render modules
-    if (opMode != "Renderer")
-    {
-        configData["RenderModuleOverrides"]["DLSSUpscaleRenderModule"]["RenderWidth"]  = remoteConfig["StartupConfiguration"]["RenderWidth"];
-        configData["RenderModuleOverrides"]["DLSSUpscaleRenderModule"]["RenderHeight"] = remoteConfig["StartupConfiguration"]["RenderHeight"];
-    }
+    m_UIMethod = remoteConfig["Upscaler"].get<UpscaleMethod>();
 
     // Let the framework parse all the "known" options for us
     ParseConfigData(configData);
@@ -144,13 +133,13 @@ void FSRSample::RegisterSampleModules()
     rendermodule::RegisterCommonRenderModules();
 
     // Register rest of the render modules
-    if ((m_OperationMode & OperationMode::Renderer) == OperationMode::Renderer)
+    if (HasCapability(FrameworkCapability::Renderer))
     {
         // Init all pre-registered render modules
         rendermodule::RegisterAvailableRenderModules();
     }
 
-    if ((m_OperationMode & OperationMode::Upscaler) == OperationMode::Upscaler)
+    if (HasCapability(FrameworkCapability::Upscaler))
     {
         // Register the upscaler render modules
         RenderModuleFactory::RegisterModule<DLSSRenderModule>("DLSSRenderModule");
@@ -173,8 +162,26 @@ int32_t FSRSample::DoSampleInit()
     m_pFSRRemoteRenderModule = static_cast<FSRRemoteRenderModule*>(GetFramework()->GetRenderModule("FSRRemoteRenderModule"));
     CauldronAssert(ASSERT_CRITICAL, m_pFSRRemoteRenderModule, L"FidelityFX FSR Sample: Error: Could not find FSRRemote render module.");
 
+    // Register additional exports for translucency pass
+    const Texture* pReactiveMask            = GetFramework()->GetRenderTexture(L"ReactiveMask");
+    const Texture* pCompositionMask         = GetFramework()->GetRenderTexture(L"TransCompMask");
+    BlendDesc      reactiveCompositionBlend = {
+        true, Blend::InvDstColor, Blend::One, BlendOp::Add, Blend::One, Blend::Zero, BlendOp::Add, static_cast<uint32_t>(ColorWriteMask::Red)};
+
+    OptionalTransparencyOptions transOptions;
+    transOptions.OptionalTargets.push_back(std::make_pair(pReactiveMask, reactiveCompositionBlend));
+    transOptions.OptionalTargets.push_back(std::make_pair(pCompositionMask, reactiveCompositionBlend));
+    transOptions.OptionalAdditionalOutputs = L"float ReactiveTarget : SV_TARGET1; float CompositionTarget : SV_TARGET2;";
+    transOptions.OptionalAdditionalExports =
+        L"float hasAnimatedTexture = 0.f; output.ReactiveTarget = ReactiveMask; output.CompositionTarget = max(Alpha, hasAnimatedTexture);";
+
+    // Add additional exports for FSR to translucency pass
+    m_pTransRenderModule = static_cast<TranslucencyRenderModule*>(GetFramework()->GetRenderModule("TranslucencyRenderModule"));
+    CauldronAssert(ASSERT_CRITICAL, m_pTransRenderModule, L"FidelityFX FSR Sample: Error: Could not find Translucency render module.");
+    m_pTransRenderModule->AddOptionalTransparencyOptions(transOptions);
+
     // If we have the renderer capability, register the jitter callback
-    if (GetConfig()->EnableJitter)
+    if (HasCapability(FrameworkCapability::Renderer) && GetConfig()->EnableJitter)
     {
         CameraJitterCallback jitterCallback = [this](Vec2& values) {
             // Increment jitter index for frame
@@ -192,20 +199,19 @@ int32_t FSRSample::DoSampleInit()
     }
 
     // Rest is only needed if we are in Upscaler mode
-    if ((m_OperationMode & OperationMode::Upscaler) != OperationMode::Upscaler)
+    if (!HasCapability(FrameworkCapability::Upscaler))
         return 0;
 
     // Store pointers to various render modules
     m_pDLSSRenderModule        = static_cast<DLSSRenderModule*>(GetFramework()->GetRenderModule("DLSSRenderModule"));
     m_pDLSSUpscaleRenderModule = static_cast<DLSSUpscaleRenderModule*>(GetFramework()->GetRenderModule("DLSSUpscaleRenderModule"));
-    m_pFSR2RenderModule        = static_cast<FSR2RenderModule*>(GetFramework()->GetRenderModule("FSR2RenderModule"));
-    m_pFSR3UpscaleRenderModule = static_cast<FSR3UpscaleRenderModule*>(GetFramework()->GetRenderModule("FSR3UpscaleRenderModule"));
     m_pFSR3RenderModule        = static_cast<FSR3RenderModule*>(GetFramework()->GetRenderModule("FSR3RenderModule"));
+    m_pFSR3UpscaleRenderModule = static_cast<FSR3UpscaleRenderModule*>(GetFramework()->GetRenderModule("FSR3UpscaleRenderModule"));
+    m_pFSR2RenderModule        = static_cast<FSR2RenderModule*>(GetFramework()->GetRenderModule("FSR2RenderModule"));
+    m_pFSR1RenderModule        = static_cast<FSR1RenderModule*>(GetFramework()->GetRenderModule("FSR1RenderModule"));
 
-    m_pFSR1RenderModule    = static_cast<FSR1RenderModule*>(GetFramework()->GetRenderModule("FSR1RenderModule"));
     m_pUpscaleRenderModule = static_cast<UpscaleRenderModule*>(GetFramework()->GetRenderModule("UpscaleRenderModule"));
     m_pTAARenderModule     = static_cast<TAARenderModule*>(GetFramework()->GetRenderModule("TAARenderModule"));
-    m_pTransRenderModule   = static_cast<TranslucencyRenderModule*>(GetFramework()->GetRenderModule("TranslucencyRenderModule"));
 
     m_pTAARenderModule->EnableModule(false);
 
@@ -218,23 +224,6 @@ int32_t FSRSample::DoSampleInit()
     CauldronAssert(ASSERT_CRITICAL, m_pFSR1RenderModule, L"FidelityFX FSR Sample: Error: Could not find FSR1 render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pUpscaleRenderModule, L"FidelityFX FSR Sample: Error: Could not find upscale render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pTAARenderModule, L"FidelityFX FSR Sample: Error: Could not find TAA render module.");
-    CauldronAssert(ASSERT_CRITICAL, m_pTransRenderModule, L"FidelityFX FSR Sample: Error: Could not find Translucency render module.");
-
-    // Register additional exports for translucency pass
-    const Texture* pReactiveMask            = GetFramework()->GetRenderTexture(L"ReactiveMask");
-    const Texture* pCompositionMask         = GetFramework()->GetRenderTexture(L"TransCompMask");
-    BlendDesc      reactiveCompositionBlend = {
-        true, Blend::InvDstColor, Blend::One, BlendOp::Add, Blend::One, Blend::Zero, BlendOp::Add, static_cast<uint32_t>(ColorWriteMask::Red)};
-
-    OptionalTransparencyOptions transOptions;
-    transOptions.OptionalTargets.push_back(std::make_pair(pReactiveMask, reactiveCompositionBlend));
-    transOptions.OptionalTargets.push_back(std::make_pair(pCompositionMask, reactiveCompositionBlend));
-    transOptions.OptionalAdditionalOutputs = L"float ReactiveTarget : SV_TARGET1; float CompositionTarget : SV_TARGET2;";
-    transOptions.OptionalAdditionalExports =
-        L"float hasAnimatedTexture = 0.f; output.ReactiveTarget = ReactiveMask; output.CompositionTarget = max(Alpha, hasAnimatedTexture);";
-
-    // Add additional exports for FSR to translucency pass
-    m_pTransRenderModule->AddOptionalTransparencyOptions(transOptions);
 
     // Set all other UI sections to collapse by default
     for (auto& section : GetUIManager()->GetGeneralLayout())
@@ -268,8 +257,6 @@ int32_t FSRSample::DoSampleInit()
     // Setup the default upscaler (FSR2 for now)
     m_UIMethod = UpscaleMethod::FSR2;
 #endif
-    if (m_UpscalingOnStart)
-        SwitchUpscaler(m_UIMethod);
     return 0;
 }
 
@@ -342,7 +329,7 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
 void FSRSample::DoSampleUpdates(double deltaTime)
 {
     // Only needed if we are in Upscaler mode
-    if ((m_OperationMode & OperationMode::Upscaler) != OperationMode::Upscaler)
+    if (!HasCapability(FrameworkCapability::Upscaler))
         return;
 
     // Upscaler changes need to be done before the rest of the frame starts executing
@@ -362,7 +349,7 @@ void FSRSample::DoSampleResize(const ResolutionInfo& resInfo)
 void FSRSample::DoSampleShutdown()
 {
     // Only needed if we are in Upscaler mode
-    if ((m_OperationMode & OperationMode::Upscaler) != OperationMode::Upscaler)
+    if (!HasCapability(FrameworkCapability::Upscaler))
         return;
 
     if (m_pCurrentUpscaler)

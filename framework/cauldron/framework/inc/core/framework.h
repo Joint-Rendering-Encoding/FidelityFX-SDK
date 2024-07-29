@@ -164,6 +164,10 @@ namespace cauldron
         // FPS limiter
         uint32_t LimitedFrameRate = 240;
 
+        // Render
+        uint32_t InitialRenderWidth = 1920;
+        uint32_t InitialRenderHeight = 1080;
+
         // Presentation
         uint8_t  BackBufferCount = 2;
         uint32_t Width = 1920;
@@ -250,6 +254,15 @@ namespace cauldron
         wchar_t* CmdLine;
         void*    AdditionalParams;
     };
+
+    enum class FrameworkCapability
+    {
+        None = 0,
+        Renderer,
+        Upscaler,
+        Default
+    };
+    ENUM_FLAG_OPERATORS(FrameworkCapability);
 
     /**
      * @class FrameworkImpl
@@ -598,6 +611,16 @@ namespace cauldron
         uint64_t GetFrameID() const { return m_FrameID; }
 
         /**
+         * @brief   Checks if the framework has the capability.
+         */
+        bool     HasCapability(FrameworkCapability capability) const { return (m_Capabilities & capability) == capability; }
+
+        /**
+         * @brief   Checks if the framework has only the capability.
+         */
+        bool     IsOnlyCapability(FrameworkCapability capability) const { return m_Capabilities == capability; }
+
+        /**
          * @brief   Query whether the sample is currently running.
          */
         bool     IsRunning() const { return m_Running.load(); }
@@ -646,15 +669,12 @@ namespace cauldron
         /**
          * @brief    Set the function that determines if the next MainLoop function should be called or not
          */
-        void SetReadyFunction(std::function<bool()> fn)
-        {
-            m_ReadyForNext = fn;
-        }
+        void SetReadyFunction(std::function<bool()> fn) { m_ReadyForNext = fn; }
 
-        bool CanExecuteMainLoop()
-        {
-            return m_ReadyForNext();
-        }
+        /**
+         * @brief    Check if the next MainLoop function should be called or not
+         */
+        bool CanExecuteMainLoop() { return m_ReadyForNext(); }
 
     private:
         friend class FrameworkInternal;
@@ -697,6 +717,8 @@ namespace cauldron
 
         void DeleteCommandListAsync(void* pInFlightGPUInfo);
 
+        void SetCapabilities(FrameworkCapability capabilities) { m_Capabilities = capabilities; }
+
         // Members
         CauldronConfig        m_Config = {};
         std::wstring          m_Name;
@@ -709,6 +731,7 @@ namespace cauldron
         ResolutionUpdateFunc  m_ResolutionUpdaterFn       = nullptr;
         bool                  m_UpscalerEnabled           = false;
         bool                  m_FrameInterpolationEnabled = false;
+        FrameworkCapability   m_Capabilities              = FrameworkCapability::Default;
         std::atomic_bool      m_Running                   = false;
         FrameCaptureState     m_RenderDocCaptureState     = FrameCaptureState::None;
         FrameCaptureState     m_PixCaptureState           = FrameCaptureState::None;

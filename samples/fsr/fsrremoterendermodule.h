@@ -59,6 +59,7 @@ private:
     uint32_t m_RenderHeight = 1440;
 
     // FSR Remote variables
+    bool m_RendererModeEnabled = false;
     bool m_UpscalerModeEnabled = false;
     bool m_OnlyResizing        = false;
     int  m_BufferIndex         = 0;

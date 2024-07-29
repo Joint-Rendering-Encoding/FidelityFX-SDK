@@ -90,8 +90,8 @@ void DLSSUpscaleRenderModule::Init(const json& initData)
     m_DLSSOptions.ultraPerformancePreset = initData["ultraPerformancePreset"].get<sl::DLSSPreset>();
 
     // Get render resolution from config
-    m_RenderWidth  = initData["RenderWidth"].get<uint32_t>();
-    m_RenderHeight = initData["RenderHeight"].get<uint32_t>();
+    m_RenderWidth  = GetConfig()->InitialRenderWidth;
+    m_RenderHeight = GetConfig()->InitialRenderHeight;
 
     // Fetch needed resources
     m_pColorTarget   = GetFramework()->GetColorTargetForCallback(GetName());

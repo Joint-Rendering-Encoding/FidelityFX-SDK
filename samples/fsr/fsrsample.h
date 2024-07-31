@@ -72,7 +72,6 @@ public:
 
     virtual int32_t DoSampleInit() override;
     virtual void    DoSampleUpdates(double deltaTime) override;
-    virtual void    DoSampleResize(const cauldron::ResolutionInfo& resInfo) override;
     virtual void    DoSampleShutdown() override;
 
 private:
@@ -94,7 +93,6 @@ private:
 
     void SwitchUpscaler(UpscaleMethod newUpscaler);
 
-    uint32_t                m_JitterIndex      = 0;
     UpscaleMethod           m_Method           = UpscaleMethod::Native;
     UpscaleMethod           m_UIMethod         = UpscaleMethod::Native;
     cauldron::RenderModule* m_pCurrentUpscaler = nullptr;

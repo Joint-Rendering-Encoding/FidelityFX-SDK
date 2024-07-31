@@ -141,12 +141,16 @@ namespace cauldron
         Mat4 m_InvProjectionMatrix;
         Mat4 m_InvViewProjectionMatrix;
 
+        Mat4 m_PrevViewMatrix;
+        Mat4 m_PrevViewProjectionMatrix;
+
         float m_Speed;
         bool  m_Dirty;
         bool  m_ArcBallMode;
 
         Vec2 m_jitterValues;
         Mat4 m_ProjJittered;
+        Mat4 m_PrevProjJittered;
     };
 
     typedef std::function<void(Vec2& values)> CameraJitterCallback;
@@ -199,11 +203,14 @@ namespace cauldron
                 m_InvViewMatrix,
                 m_InvProjectionMatrix,
                 m_InvViewProjectionMatrix,
+                m_PrevViewMatrix,
+                m_PrevViewProjectionMatrix,
                 m_Speed,
                 m_Dirty,
                 m_ArcBallMode,
                 m_jitterValues,
-                m_ProjJittered
+                m_ProjJittered,
+                m_PrevProjJittered
             };
         }
 
@@ -220,17 +227,20 @@ namespace cauldron
             m_Yaw      = data.m_Yaw;
             m_Pitch    = data.m_Pitch;
             m_pOwner->SetTransform(data.m_OwnerTransform);
-            m_ViewMatrix              = data.m_ViewMatrix;
-            m_ProjectionMatrix        = data.m_ProjectionMatrix;
-            m_ViewProjectionMatrix    = data.m_ViewProjectionMatrix;
-            m_InvViewMatrix           = data.m_InvViewMatrix;
-            m_InvProjectionMatrix     = data.m_InvProjectionMatrix;
-            m_InvViewProjectionMatrix = data.m_InvViewProjectionMatrix;
-            m_Speed                   = data.m_Speed;
-            m_Dirty                   = data.m_Dirty;
-            m_ArcBallMode             = data.m_ArcBallMode;
-            m_jitterValues            = data.m_jitterValues;
-            m_ProjJittered            = data.m_ProjJittered;
+            m_ViewMatrix               = data.m_ViewMatrix;
+            m_ProjectionMatrix         = data.m_ProjectionMatrix;
+            m_ViewProjectionMatrix     = data.m_ViewProjectionMatrix;
+            m_InvViewMatrix            = data.m_InvViewMatrix;
+            m_InvProjectionMatrix      = data.m_InvProjectionMatrix;
+            m_InvViewProjectionMatrix  = data.m_InvViewProjectionMatrix;
+            m_PrevViewMatrix           = data.m_PrevViewMatrix;
+            m_PrevViewProjectionMatrix = data.m_PrevViewProjectionMatrix;
+            m_Speed                    = data.m_Speed;
+            m_Dirty                    = data.m_Dirty;
+            m_ArcBallMode              = data.m_ArcBallMode;
+            m_jitterValues             = data.m_jitterValues;
+            m_ProjJittered             = data.m_ProjJittered;
+            m_PrevProjJittered         = data.m_PrevProjJittered;
         }
 
         /**
@@ -377,7 +387,6 @@ namespace cauldron
         CameraComponentData*    m_pData;
 
         // Shared data handle and view
-        uint32_t m_BufferIndex = 0;
         HANDLE   m_hSharedData = nullptr;
         LPVOID   m_pSharedView = nullptr;
         ShareableCameraData* m_pSharedData[FSR_REMOTE_SHARED_BUFFER_COUNT] = {nullptr};

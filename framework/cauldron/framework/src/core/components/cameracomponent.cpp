@@ -264,7 +264,7 @@ namespace cauldron
     void CameraComponent::Update(double deltaTime)
     {
         // Always update temporal information
-        m_PrevViewMatrix = m_ViewMatrix;
+        m_PrevViewMatrix           = m_ViewMatrix;
         m_PrevViewProjectionMatrix = m_ViewProjectionMatrix;
         m_PrevProjJittered         = m_ProjJittered;
 
@@ -286,12 +286,12 @@ namespace cauldron
             // Read the next shared data slot
             if (GetFramework()->IsOnlyCapability(FrameworkCapability::Upscaler))
             {
-                CauldronAssert(ASSERT_CRITICAL, m_pSharedData[m_BufferIndex], L"Shared data is not mapped. Cannot read data from shared memory.");
+                uint32_t bufferIndex = GetFramework()->GetBufferIndex();
+                CauldronAssert(ASSERT_CRITICAL, m_pSharedData[bufferIndex], L"Shared data is not mapped. Cannot read data from shared memory.");
 
                 // Copy the shared data to our local data
                 ShareableCameraData* shareableData = (ShareableCameraData*)malloc(sizeof(ShareableCameraData));
-                memcpy(shareableData, m_pSharedData[m_BufferIndex], sizeof(ShareableCameraData));
-                m_BufferIndex = (m_BufferIndex + 1) % FSR_REMOTE_SHARED_BUFFER_COUNT;
+                memcpy(shareableData, m_pSharedData[bufferIndex], sizeof(ShareableCameraData));
 
                 // Set the shareable data to the owner
                 SetShareableData(*shareableData);
@@ -415,12 +415,12 @@ namespace cauldron
             // Transfer the shareable camera data to next slot
             if (GetFramework()->IsOnlyCapability(FrameworkCapability::Renderer))
             {
-                CauldronAssert(ASSERT_CRITICAL, m_pSharedData[m_BufferIndex], L"Shared data is not mapped. Cannot write data to shared memory.");
+                uint32_t bufferIndex = GetFramework()->GetBufferIndex();
+                CauldronAssert(ASSERT_CRITICAL, m_pSharedData[bufferIndex], L"Shared data is not mapped. Cannot write data to shared memory.");
 
                 // Copy the local data to the shared data
                 const ShareableCameraData& shareableData = GetShareableData();
-                memcpy(m_pSharedData[m_BufferIndex], &shareableData, sizeof(ShareableCameraData));
-                m_BufferIndex = (m_BufferIndex + 1) % FSR_REMOTE_SHARED_BUFFER_COUNT;
+                memcpy(m_pSharedData[bufferIndex], &shareableData, sizeof(ShareableCameraData));
             }
         }
         else

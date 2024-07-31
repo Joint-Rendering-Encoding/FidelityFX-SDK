@@ -185,14 +185,11 @@ int32_t FSRSample::DoSampleInit()
     if (HasCapability(FrameworkCapability::Renderer) && GetConfig()->EnableJitter)
     {
         CameraJitterCallback jitterCallback = [this](Vec2& values) {
-            // Increment jitter index for frame
-            ++m_JitterIndex;
-
             // Update FSR3 jitter for built in TAA
             const ResolutionInfo& resInfo          = GetFramework()->GetResolutionInfo();
             const int32_t         jitterPhaseCount = ffxFsr3GetJitterPhaseCount(resInfo.RenderWidth, resInfo.DisplayWidth);
             float                 m_JitterX, m_JitterY;
-            ffxFsr3GetJitterOffset(&m_JitterX, &m_JitterY, m_JitterIndex, jitterPhaseCount);
+            ffxFsr3GetJitterOffset(&m_JitterX, &m_JitterY, GetBufferIndex(), jitterPhaseCount);
 
             values = Vec2(-2.f * m_JitterX / resInfo.RenderWidth, 2.f * m_JitterY / resInfo.RenderHeight);
         };
@@ -345,11 +342,6 @@ void FSRSample::DoSampleUpdates(double deltaTime)
         m_Method = m_UIMethod;
         SwitchUpscaler(m_UIMethod);
     }
-}
-
-void FSRSample::DoSampleResize(const ResolutionInfo& resInfo)
-{
-    m_JitterIndex = 0;
 }
 
 void FSRSample::DoSampleShutdown()

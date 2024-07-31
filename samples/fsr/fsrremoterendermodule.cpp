@@ -52,10 +52,11 @@ void FSRRemoteRenderModule::Init(const json& initData)
 
         // The framework will run MainLoop based on the outcome of this function
         GetFramework()->SetReadyFunction([this]() {
+            uint32_t bufferIndex = GetFramework()->GetBufferIndex();
             if (!m_UpscalerModeEnabled)
-                return m_DX12Ops->bufferStateMatches(m_BufferIndex, DX12Ops::BufferState::IDLE);
+                return m_DX12Ops->bufferStateMatches(bufferIndex, DX12Ops::BufferState::IDLE);
             else
-                return m_DX12Ops->bufferStateMatches(m_BufferIndex, DX12Ops::BufferState::READY);
+                return m_DX12Ops->bufferStateMatches(bufferIndex, DX12Ops::BufferState::READY);
         });
     }
 
@@ -121,10 +122,8 @@ void FSRRemoteRenderModule::InboundDataTransfer(double deltaTime, CommandList* p
 
     // Main loop never runs if there is no available buffer, so we can assume next buffer is in READY state
     // Transfer the resources from the shared buffer to this process
-    m_DX12Ops->TransferFromSharedBuffer(getFSRResources(), m_BufferIndex, pCmdList);
-
-    // Increase the buffer index
-    m_BufferIndex = (m_BufferIndex + 1) % FSR_REMOTE_SHARED_BUFFER_COUNT;
+    uint32_t bufferIndex = GetFramework()->GetBufferIndex();
+    m_DX12Ops->TransferFromSharedBuffer(getFSRResources(), bufferIndex, pCmdList);
 }
 
 void FSRRemoteRenderModule::OutboundDataTransfer(double deltaTime, CommandList* pCmdList)
@@ -133,8 +132,6 @@ void FSRRemoteRenderModule::OutboundDataTransfer(double deltaTime, CommandList* 
 
     // Main loop never runs if there is no available buffer, so we can assume next buffer is in IDLE state
     // Transfer the resources from this process to the shared buffer
-    m_DX12Ops->TransferToSharedBuffer(getFSRResources(), m_BufferIndex, pCmdList);
-
-    // Increase the buffer index
-    m_BufferIndex = (m_BufferIndex + 1) % FSR_REMOTE_SHARED_BUFFER_COUNT;
+    uint32_t bufferIndex = GetFramework()->GetBufferIndex();
+    m_DX12Ops->TransferToSharedBuffer(getFSRResources(), bufferIndex, pCmdList);
 }

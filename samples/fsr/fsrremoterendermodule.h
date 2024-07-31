@@ -62,7 +62,6 @@ private:
     bool     m_RendererModeEnabled = false;
     bool     m_UpscalerModeEnabled = false;
     bool     m_OnlyResizing        = false;
-    uint32_t m_BufferIndex         = 0;
 
     // DX12Ops
     std::unique_ptr<DX12Ops> m_DX12Ops;

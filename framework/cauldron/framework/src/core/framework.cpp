@@ -1542,6 +1542,9 @@ namespace cauldron
                     }
                 }
             }
+
+            // Update the buffer index
+            m_BufferIndex = (m_BufferIndex + 1) % FSR_REMOTE_SHARED_BUFFER_COUNT;
         }
 
         m_pCmdListForFrame = m_pDeviceCmdListForFrame;

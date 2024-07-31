@@ -3,6 +3,7 @@ import sys
 import json
 import copy
 import time
+import random
 import signal
 import argparse
 import subprocess
@@ -18,6 +19,7 @@ import ctypes
 
 # Other
 import numpy as np
+import pyautogui
 import matplotlib.pyplot as plt
 from skimage import img_as_float, io
 from skimage.metrics import (
@@ -31,7 +33,7 @@ This script is used to run FSR tests. It starts the renderer and upscaler proces
 and collects metrics from them and the GPU. The metrics are then printed to the
 console in JSON format.
 """
-
+pyautogui.FAILSAFE = False
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FSR_DIR = os.path.join(SCRIPT_DIR, "bin")
 
@@ -231,6 +233,12 @@ def parse_args():
         help="Use the default config, without decoupling the upscaler",
     )
     parser.add_argument(
+        "--use-release-build",
+        action="store_true",
+        default=False,
+        help="Use the release build of FidelityFX FSR",
+    )
+    parser.add_argument(
         "--structured-logs",
         action="store_true",
         default=False,
@@ -291,6 +299,11 @@ def close_by_pid(pid):
 
 def main(opts):
     # Default process arguments
+    exe_name = (
+        "FFX_FSR_NATIVE_DX12.exe"
+        if opts.use_release_build
+        else "FFX_FSR_NATIVE_DX12D.exe"
+    )
     process_args = [
         "-screenshot",
         "-displaymode",
@@ -317,7 +330,7 @@ def main(opts):
     renderer_config = get_config(mode, opts)
     apply_config(renderer_config)
     renderer = subprocess.Popen(
-        [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe"), *process_args],
+        [os.path.join(FSR_DIR, exe_name), *process_args],
         cwd=FSR_DIR,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -344,7 +357,7 @@ def main(opts):
 
     if not opts.skip_upscaler:
         upscaler = subprocess.Popen(
-            [os.path.join(FSR_DIR, "FFX_FSR_NATIVE_DX12D.exe"), *process_args],
+            [os.path.join(FSR_DIR, exe_name), *process_args],
             cwd=FSR_DIR,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -356,7 +369,7 @@ def main(opts):
             print(f"Upscaler PID: {upscaler.pid}")
 
     # Register signal handlers
-    def cleanup(sig, _):
+    def cleanup(sig, _, non_zero=False):
         if not opts.structured_logs:
             print()
             print("Cleaning up...")
@@ -383,6 +396,10 @@ def main(opts):
         if not opts.skip_upscaler and upscaler.poll() is None:
             upscaler.kill()
 
+        # Exit with the appropriate code
+        if non_zero:
+            sys.exit(1)
+
         if not opts.compare:
             if renderer.returncode != 0 or (
                 not opts.skip_upscaler and upscaler.returncode != 0
@@ -399,19 +416,45 @@ def main(opts):
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
-    # Focus the correct window
-    if not opts.skip_upscaler:
-        time.sleep(2)
-        assert focus_by_pid(
-            renderer.pid if opts.use_default else upscaler.pid
-        ), "Could not focus the window"
+    # Focus the renderer or upscaler window
+    time.sleep(2)
+    assert focus_by_pid(
+        renderer.pid if opts.use_default else upscaler.pid
+    ), "Could not focus the window"
+
+    # In case focus fails, try manual focus
+    pyautogui.moveTo(40, 20)
+    pyautogui.dragRel(500, 500, duration=0.4, tween=pyautogui.easeInOutQuad)
 
     dots = 0
+    start_time = time.time()
     if opts.structured_logs:
         print("TEST_START", utcnow_iso8601())
     while True:
         # Check if the renderer is still running
         if renderer.poll() is not None:
+            break
+
+        # If mouse is within jiggling range, move it
+        cursor_pos = pyautogui.position()
+        if (
+            cursor_pos[0] > 500
+            and cursor_pos[1] > 500
+            and cursor_pos[0] < 900
+            and cursor_pos[1] < 900
+        ):
+            # Jiggle the mouse to prevent the screen from turning off
+            pyautogui.moveTo(600, 600)
+            pyautogui.moveRel(
+                100,
+                random.randint(0, 100),
+                duration=0.25,
+                tween=pyautogui.easeInOutQuad,
+            )
+
+        # Bail out if test is taking too long
+        if opts.benchmark > 0 and time.time() - start_time > opts.benchmark + 15:
+            cleanup(None, None, non_zero=True)
             break
 
         # Check if the upscaler is still running

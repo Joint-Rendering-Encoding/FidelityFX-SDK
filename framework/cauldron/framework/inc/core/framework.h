@@ -53,6 +53,7 @@
 #include "render/rendermodule.h"
 #include "shaders/shadercommon.h"
 #include "core/taskmanager.h"
+#include "core/components/cameracomponent.h"
 
 // No way to forward declare this that I can tell
 #include "json/json.h"
@@ -198,6 +199,7 @@ namespace cauldron
             std::wstring                        Camera = L"";
             float                               SceneExposure = 1.f;
             std::vector<ParticleSpawnerDesc>    ParticleSpawners = {};
+            CameraAnimationData                 CameraAnimation = { 0 };
             
             std::wstring                        DiffuseIBL = L"..\\media\\IBL\\mud_road_puresky_Diffuse.dds";
             std::wstring                        SpecularIBL = L"..\\media\\IBL\\mud_road_puresky_Specular.dds";

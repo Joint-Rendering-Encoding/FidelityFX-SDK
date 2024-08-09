@@ -830,6 +830,23 @@ namespace cauldron
                 m_Config.StartupContent.Camera = StringToWString(loadingContent["Camera"]);
             }
 
+            // Get animation constants
+            if (loadingContent.find("Animation") != loadingContent.end())
+            {
+                m_Config.StartupContent.CameraAnimation = {
+                    loadingContent["Animation"]["Enabled"],
+                    loadingContent["Animation"]["p"],
+                    loadingContent["Animation"]["q"],
+                    loadingContent["Animation"]["xo"],
+                    loadingContent["Animation"]["yo"],
+                    loadingContent["Animation"]["zo"],
+                    loadingContent["Animation"]["spd"],
+                    loadingContent["Animation"]["lx"],
+                    loadingContent["Animation"]["ly"],
+                    loadingContent["Animation"]["lz"]
+                };
+            }
+
             // Check if we requested a specific exposure
             if (loadingContent.find("SceneExposure") != loadingContent.end())
             {
@@ -1479,6 +1496,9 @@ namespace cauldron
     // Handles updating things outside the scope of the calling sample, and calls the sample's main loop function that controls render flow
     void Framework::MainLoop()
     {
+        // Skip frame if we are currently loading content
+        if (m_pContentManager->IsCurrentlyLoading()) return;
+
         // Before doing component/render module updates, offer samples the chance to do any updates
         {
             CPUScopedProfileCapture marker(L"SampleUpdates");

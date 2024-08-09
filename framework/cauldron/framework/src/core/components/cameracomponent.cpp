@@ -34,6 +34,18 @@ namespace cauldron
     const wchar_t* CameraComponentMgr::s_ComponentName = L"CameraComponent";
     CameraComponentMgr* CameraComponentMgr::s_pComponentManager = nullptr;
 
+    static Vec4 GetTorusPosition(float p, float q, float xOff, float yOff, float zOff, float totalTime)
+    {
+        float r1 = 2.0f;
+        float r2 = 1.0f;
+
+        float x = (r1 + r2 * cosf(q * totalTime)) * cosf(p * totalTime) + xOff;
+        float y = (r1 + r2 * cosf(q * totalTime)) * sinf(p * totalTime) + yOff;
+        float z = r2 * sinf(q * totalTime) + zOff;
+
+        return Vec4(x, y, z, 1.f);  
+    }
+
     CameraComponentMgr::CameraComponentMgr() :
         ComponentMgr()
     {
@@ -225,10 +237,16 @@ namespace cauldron
 
     void CameraComponent::LookAt(const Vec4& eyePos, const Vec4& lookAt)
     {
-        m_ViewMatrix = LookAtMatrix(eyePos, lookAt, Vec4(0, 1, 0, 0));
+        #pragma message("INFO: LookAt() is intentionally left empty. This esentially disables any manual camera movement.")
+        return; // Only we will be calling LookAtActual
+    }
+
+    void CameraComponent::LookAtActual(const Vec4& eyePos, const Vec4& lookAt)
+    {
+        m_ViewMatrix    = LookAtMatrix(eyePos, lookAt, Vec4(0, 1, 0, 0));
         m_InvViewMatrix = inverse(m_ViewMatrix);
         m_pOwner->SetTransform(m_InvViewMatrix);
-        m_Dirty = true; // Need to recalculate all other information
+        m_Dirty = true;  // Need to recalculate all other information
 
         // Update our distance
         m_Distance = length(eyePos - lookAt);
@@ -271,14 +289,6 @@ namespace cauldron
         // If this camera is the currently active camera for the scene, check for input
         if (GetScene()->GetCurrentCamera() == this)
         {
-            // if (animated)
-            // {
-            //      #pragma message(Reminder "Support camera animations")
-            //      Update positional info with animation
-            //      Mark camera dirty
-            // }
-            // else
-
             // If we are not in default mode, map shared data
             if (!GetFramework()->HasCapability(FrameworkCapability::Renderer | FrameworkCapability::Upscaler))
                 MapSharedData();
@@ -299,6 +309,18 @@ namespace cauldron
 
                 // Don't update anything else
                 return;
+            }
+
+            // Do animation
+            uint32_t            index     = GetFramework()->GetBufferIndex();
+            CameraAnimationData pAnimData = GetFramework()->GetConfig()->StartupContent.CameraAnimation;
+            if (index != m_LastBufferIndex && pAnimData.enabled)
+            {
+                m_AnimationTime += pAnimData.spd;
+                Vec4 eyePos = GetTorusPosition(pAnimData.p, pAnimData.q, pAnimData.xo, pAnimData.yo, pAnimData.zo, m_AnimationTime);
+                Vec4 lookAt = Vec4(pAnimData.lx, pAnimData.ly, pAnimData.lz, 1.f);
+                LookAtActual(eyePos, lookAt);
+                m_LastBufferIndex = index;
             }
 
             // Do camera update (Updates will be made to View matrix - similar to Cauldron 1 - and then pushed up to owner via InvViewMatrix)

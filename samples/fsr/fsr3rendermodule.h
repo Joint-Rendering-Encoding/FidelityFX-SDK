@@ -113,7 +113,7 @@ private:
     bool    m_AllowAsyncCompute         = true;
     bool    m_PendingEnableAsyncCompute = true;
     bool    m_UseCallback           = true;
-    bool    m_DrawDebugTearLines    = true;
+    bool    m_DrawDebugTearLines    = false;
     bool    m_DrawDebugView         = false;
     bool    m_OfUiEnabled           = true;
 #endif

@@ -28,6 +28,8 @@
 
 #include <functional>
 
+#include "sl_matrix_helpers.h"
+
 using namespace cauldron;
 using namespace math;
 
@@ -250,6 +252,8 @@ void DLSSUpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     // Set DLSS options
     m_DLSSOptions.outputWidth           = resInfo.DisplayWidth;
     m_DLSSOptions.outputHeight          = resInfo.DisplayHeight;
+    m_DLSSOptions.preExposure           = GetScene()->GetSceneExposure();
+    m_DLSSOptions.sharpness             = 0.8f;
     m_DLSSOptions.useAutoExposure       = sl::eTrue;
     m_DLSSOptions.colorBuffersHDR       = sl::eTrue;
     m_DLSSOptions.alphaUpscalingEnabled = sl::eFalse;
@@ -261,7 +265,7 @@ void DLSSUpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
     // Provide common constants
     sl::Constants constants{};
-    constants.mvecScale              = {1.0f / resInfo.RenderWidth, 1.0f / resInfo.RenderHeight};
+    constants.mvecScale              = {1.0, 1.0};
     constants.jitterOffset           = {-pCamera->GetJitter(resInfo.RenderWidth, resInfo.RenderHeight).getX(), -pCamera->GetJitter(resInfo.RenderWidth, resInfo.RenderHeight).getY()};
     constants.depthInverted          = GetConfig()->InvertedDepth ? sl::Boolean::eTrue : sl::Boolean::eFalse;
     constants.cameraPinholeOffset    = {0.0f, 0.0f};
@@ -292,6 +296,7 @@ void DLSSUpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     constants.cameraAspectRatio    = resInfo.GetDisplayAspectRatio();
     constants.cameraMotionIncluded = sl::Boolean::eTrue;
 
+    sl::recalculateCameraMatrices(constants);
     res = slSetConstants(constants, *m_pFrameToken, m_Viewport);
     CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS constants (%d)", res);
 

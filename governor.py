@@ -36,6 +36,7 @@ console in JSON format.
 pyautogui.FAILSAFE = False
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FSR_DIR = os.path.join(SCRIPT_DIR, "bin")
+FSR_REMOTE_SHARED_BUFFER_COUNT = 10
 
 UPSCALERS = [
     "Native",
@@ -52,6 +53,9 @@ UPSCALERS = [
 
 # List of upscalers that require jitter, otherwise it should be disabled
 NEEDS_JITTER = ["FSR2", "FSR3Upscale", "FSR3", "DLSSUpscale", "DLSS"]
+
+# List of upscalers that has Frame Generation
+FRAME_GENERATION = ["FSR3", "DLSS"]
 
 DLSS_MODES = [
     "Performance",
@@ -92,7 +96,7 @@ def get_config(mode, opts):
         tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = opts.fps
     else:
         # If using frame generation, double the target FPS
-        is_fg = opts.upscaler in ["FSR3", "DLSS"]
+        is_fg = opts.upscaler in FRAME_GENERATION
         if is_fg:
             assert (
                 opts.fps <= 30
@@ -292,6 +296,12 @@ def parse_args():
         help="Enable comparison with the reference image, will run the same configuration but without upscaler",
     )
     parser.add_argument(
+        "--compare-fps",
+        type=int,
+        default=60,
+        help="The FPS to run the comparison upscaler",
+    )
+    parser.add_argument(
         "--switch-default-mode",
         action="store_true",
         default=False,
@@ -338,6 +348,24 @@ def close_by_pid(pid):
     return False
 
 
+def get_process_args(video=False, duration=0, is_default=False, has_fg=False):
+    process_args = [
+        "-screenshot-for-video" if video else "-screenshot",
+        "-displaymode",
+        "DISPLAYMODE_LDR",
+        "-benchmark",
+        "json",
+    ]
+
+    if duration > 0:
+        if not is_default and has_fg:
+            # BUG: Upscaler gets blocked for buffer count. Running for 10 more frames to avoid this.
+            # Weird thing is that this is only needed for frame generation upscalers.
+            duration += FSR_REMOTE_SHARED_BUFFER_COUNT
+        process_args.append(f"duration={duration}")
+    return process_args
+
+
 def main(opts):
     # Default process arguments
     exe_name = (
@@ -345,19 +373,6 @@ def main(opts):
         if opts.use_release_build
         else "FFX_FSR_NATIVE_DX12D.exe"
     )
-    process_args = [
-        "-displaymode",
-        "DISPLAYMODE_LDR",
-        "-benchmark",
-        "json",
-        f"duration={opts.benchmark * opts.fps}" if opts.benchmark > 0 else "",
-    ]
-
-    # For detached mode just get screenshots for upscaler
-    if opts.use_default:
-        process_args.append(
-            "-screenshot-for-video" if opts.screenshot_for_video else "-screenshot"
-        )
 
     # For Native rendering, match the render resolution to the present resolution
     if opts.upscaler == "Native":
@@ -376,7 +391,15 @@ def main(opts):
     renderer_config = get_config(mode, opts)
     apply_config(renderer_config)
     renderer = subprocess.Popen(
-        [os.path.join(FSR_DIR, exe_name), *process_args],
+        [
+            os.path.join(FSR_DIR, exe_name),
+            *get_process_args(
+                video=opts.screenshot_for_video,
+                duration=opts.benchmark * opts.fps,
+                is_default=opts.use_default,
+                has_fg=opts.upscaler in FRAME_GENERATION,
+            ),
+        ],
         cwd=FSR_DIR,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -403,11 +426,16 @@ def main(opts):
         # if statement because we may use Visual Studio to debug the upscaler
 
     if not opts.skip_upscaler:
-        process_args.append(
-            "-screenshot-for-video" if opts.screenshot_for_video else "-screenshot"
-        )
         upscaler = subprocess.Popen(
-            [os.path.join(FSR_DIR, exe_name), *process_args],
+            [
+                os.path.join(FSR_DIR, exe_name),
+                *get_process_args(
+                    video=opts.screenshot_for_video,
+                    duration=opts.benchmark * opts.fps,
+                    is_default=opts.use_default,
+                    has_fg=opts.upscaler in FRAME_GENERATION,
+                ),
+            ],
             cwd=FSR_DIR,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -469,9 +497,7 @@ def main(opts):
     if not skip_upscaler:
         # Focus the renderer or upscaler window
         time.sleep(2)
-        assert focus_by_pid(
-            renderer.pid if opts.use_default else upscaler.pid
-        ), "Could not focus the window"
+        focus_by_pid(renderer.pid if opts.use_default else upscaler.pid)
 
         # In case focus fails, try manual focus
         pyautogui.moveTo(40, 20)
@@ -541,9 +567,6 @@ def load_image_for_pid(pid):
 if __name__ == "__main__":
     args = parse_args()
 
-    if args.benchmark > 0:
-        assert args.benchmark >= 5, "Benchmark duration must be at least 5 seconds"
-
     if args.compare:
         assert (
             not args.screenshot_for_video
@@ -551,13 +574,17 @@ if __name__ == "__main__":
 
     # Run with the requested arguments
     test_pid = main(args)
+    sys.stdout.flush()
 
     if args.compare:
         # Run the same configuration without the upscaler
         compare_args = parse_args()
         compare_args.upscaler = args.compare_with
+        compare_args.fps = args.compare_fps
         if compare_args.switch_default_mode:
             compare_args.use_default = not args.use_default
+        if compare_args.upscaler == "Native":
+            compare_args.render_res = compare_args.present_res
         ref_pid = main(compare_args)
 
         # Load the images
@@ -576,7 +603,13 @@ if __name__ == "__main__":
         else:
             raise ValueError("Invalid metric")
 
-        print(f"{args.compare.upper()}: {metric:.6f}")
+        # Print the metric
+        if not args.structured_logs:
+            print(f"{args.compare.upper()}: {metric:.6f}")
+        else:
+            print(f"METRIC_{args.compare.upper()}", metric)
+            sys.stdout.flush()
+            exit(0)
 
         # Calculate the difference image
         diff = np.abs(test_image - ref_image)

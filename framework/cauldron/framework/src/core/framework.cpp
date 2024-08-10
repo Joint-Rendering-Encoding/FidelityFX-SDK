@@ -378,8 +378,23 @@ namespace cauldron
             GetTaskManager()->AddTask(task);
 
         // Hide the UI if we'll take a screenshot
-        if (m_Config.TakeScreenshot)
+        if (m_Config.TakeScreenshot || m_Config.TakeScreenshotForVideo)
             GetUIManager()->HideUI();
+
+        // If we are going to take screenshots for a video, we need to allocate a lot of memory
+        if (m_Config.TakeScreenshotForVideo)
+        {
+            m_pColorTarget                = GetRenderTexture(L"LDR8Color");
+            const ResolutionInfo& resInfo = GetFramework()->GetResolutionInfo();
+            for (uint32_t i = 0; i < m_VideoTextureCount; i++)
+            {
+                TextureDesc desc   = m_pColorTarget->GetDesc();
+                desc.Width         = resInfo.DisplayWidth;
+                desc.Height        = resInfo.DisplayHeight;
+                desc.Name          = L"TSFV_" + std::to_wstring(i);
+                m_vecVideoTextures.push_back(GetDynamicResourcePool()->CreateTexture(&desc, ResourceState::CopyDest, nullptr));
+            }
+        }
 
         // Request startup content
         for (const auto& scene : m_Config.StartupContent.Scenes)
@@ -1370,6 +1385,12 @@ namespace cauldron
                 continue;
             }
 
+            if (command == L"-screenshot-for-video")
+            {
+                m_Config.TakeScreenshotForVideo = true;
+                continue;
+            }
+
             // perf dump
             if (command == L"-benchmark")
             {
@@ -1737,6 +1758,7 @@ namespace cauldron
     void Framework::DeleteCommandListAsync(void* pInFlightGPUInfo)
     {
         GPUExecutionPacket* pInflightPacket = static_cast<GPUExecutionPacket*>(pInFlightGPUInfo);
+        uint64_t frameID = GetFrameID();
 
         // Wait until the command lists are processed
         m_pDevice->WaitOnQueue(pInflightPacket->CompletionID, CommandQueue::Graphics);
@@ -1746,6 +1768,38 @@ namespace cauldron
             delete *cmdListIter;
         pInflightPacket->CmdLists.clear();
         delete pInflightPacket;
+
+        // Create save task if needed
+        if (m_Config.TakeScreenshotForVideo)
+        {
+            // Get process PID
+            const std::wstring pid = std::to_wstring(GetCurrentProcessId());
+
+            // If we are bencharmking, use the benchmarking path
+            filesystem::path outputPath;
+            if (m_Config.EnableBenchmark)
+            {
+                outputPath = m_Config.BenchmarkPath + L"\\" + pid + L"\\";
+            }
+            else
+            {
+                outputPath = L"screenshots\\" + pid + L"\\";
+            }
+
+            // Defensive, in case path doesn't exist
+            if (!outputPath.empty())
+                filesystem::create_directories(outputPath);
+
+            // Pad the frame number to 5 digits
+            std::wstringstream frameID_str;
+            frameID_str << std::setw(5) << std::setfill(L'0') << frameID;
+
+            // Add the file extension and path
+            outputPath /= frameID_str.str() + L".jpg";
+
+            // Dump it out
+            m_pSwapChain->DumpResourceToFile(outputPath, m_vecVideoTextures[(frameID) % m_VideoTextureCount]->GetResource());
+        }
     }
 
     // Handles all end of frame logic (like present)
@@ -1754,8 +1808,27 @@ namespace cauldron
         CPUScopedProfileCapture marker(L"EndFrame");
 
         // Transition swapchain from expected state for render module usage to present
-        Barrier presentBarrier = Barrier::Transition(m_pSwapChain->GetBackBufferRT()->GetCurrentResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::Present);
+        Barrier presentBarrier = Barrier::Transition(m_pSwapChain->GetBackBufferRT()->GetCurrentResource(),
+                                                     ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource,
+                                                     ResourceState::Present);
         ResourceBarrier(m_pCmdListForFrame, 1, &presentBarrier);
+
+        if (m_Config.TakeScreenshotForVideo)
+        {
+            // Move to copy source state
+            Barrier presentBarrier = Barrier::Transition(
+                m_pColorTarget->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopySource);
+            ResourceBarrier(m_pCmdListForFrame, 1, &presentBarrier);
+
+            // Copy the back buffer to a texture
+            TextureCopyDesc desc(m_pColorTarget->GetResource(), m_vecVideoTextures[GetFrameID() % m_VideoTextureCount]->GetResource());
+            CopyTextureRegion(m_pCmdListForFrame, &desc);
+
+            // Move back to present state
+            presentBarrier = Barrier::Transition(
+                m_pColorTarget->GetResource(), ResourceState::CopySource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource);
+            ResourceBarrier(m_pCmdListForFrame, 1, &presentBarrier);
+        }
 
         {
             // Asynchronously delete the active command list in the background once it's cleared the graphics queue

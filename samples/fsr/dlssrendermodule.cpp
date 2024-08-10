@@ -186,44 +186,8 @@ void DLSSRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS options (%d)", res);
 
     // Get a new frame token
-    slGetNewFrameToken(m_pFrameToken);
-
-    // Provide common constants
-    sl::Constants constants{};
-    constants.mvecScale              = {1.0f / resInfo.RenderWidth, 1.0f / resInfo.RenderHeight};
-    constants.jitterOffset           = {-pCamera->GetJitter(resInfo.RenderWidth, resInfo.RenderHeight).getX(),
-                                        -pCamera->GetJitter(resInfo.RenderWidth, resInfo.RenderHeight).getY()};
-    constants.depthInverted          = GetConfig()->InvertedDepth ? sl::Boolean::eTrue : sl::Boolean::eFalse;
-    constants.cameraPinholeOffset    = {0.0f, 0.0f};
-    constants.reset                  = sl::Boolean::eFalse;
-    constants.motionVectors3D        = sl::Boolean::eFalse;
-    constants.orthographicProjection = sl::Boolean::eFalse;
-    constants.motionVectorsDilated   = sl::Boolean::eFalse;
-    constants.motionVectorsJittered  = sl::Boolean::eFalse;
-
-    // Camera constants
-    constants.cameraViewToClip = pCamera->GetViewProjection();
-    constants.clipToCameraView = pCamera->GetInverseViewProjection();
-    constants.clipToPrevClip   = pCamera->GetPreviousViewProjection();
-    constants.prevClipToClip   = inverse(pCamera->GetPreviousViewProjection());
-
-    // Camera position and direction
-    constants.cameraPos   = pCamera->GetCameraPos();
-    constants.cameraUp    = pCamera->GetUp().getXYZ();
-    constants.cameraRight = pCamera->GetRight().getXYZ();
-    constants.cameraFwd   = pCamera->GetDirection().getXYZ();
-
-    // Camera planes
-    constants.cameraNear = pCamera->GetNearPlane();
-    constants.cameraFar  = pCamera->GetFarPlane();
-    constants.cameraFOV  = pCamera->GetFovY();
-
-    // Rest of the camera constants
-    constants.cameraAspectRatio    = resInfo.GetDisplayAspectRatio();
-    constants.cameraMotionIncluded = sl::Boolean::eTrue;
-
-    res = slSetConstants(constants, *m_pFrameToken, m_Viewport);
-    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS constants (%d)", res);
+    uint32_t pFrameIndex = GetFramework()->GetFrameID();
+    slGetNewFrameToken(m_pFrameToken, &pFrameIndex);
 
     // Sleep with Reflex
     res = slReflexSleep(*m_pFrameToken);  // TODO: Integrate Reflex in FPS limiter

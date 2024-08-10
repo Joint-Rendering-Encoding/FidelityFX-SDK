@@ -128,6 +128,7 @@ namespace cauldron
          * @brief   Creates a screenshot of the current swap chain.
          */
         virtual void DumpSwapChainToFile(std::experimental::filesystem::path filePath) = 0;
+        virtual void DumpResourceToFile(std::experimental::filesystem::path filePath, const GPUResource* c_pResource) = 0;
 
         /**
          * @brief   Verifies if requested display mode can be supported.

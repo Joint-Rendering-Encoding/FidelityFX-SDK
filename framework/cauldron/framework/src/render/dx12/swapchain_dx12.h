@@ -63,6 +63,7 @@ namespace cauldron
         void WaitForSwapChain() override;
         void Present() override;
 
+        void DumpResourceToFile(std::experimental::filesystem::path filePath, const GPUResource* c_pResource) override;
         void DumpSwapChainToFile(std::experimental::filesystem::path filePath) override;
 
         void EnumerateOutputs();

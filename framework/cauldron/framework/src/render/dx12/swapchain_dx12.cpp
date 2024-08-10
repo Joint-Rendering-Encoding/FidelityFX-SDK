@@ -173,6 +173,79 @@ namespace cauldron
         }
     }
 
+    void SwapChainInternal::DumpResourceToFile(filesystem::path filePath, const GPUResource* c_pResource)
+    {
+        GPUResource* pResource = const_cast<GPUResource*>(c_pResource);
+        D3D12_RESOURCE_DESC fromDesc = pResource->GetImpl()->DX12Desc();
+
+        CD3DX12_HEAP_PROPERTIES readBackHeapProperties(D3D12_HEAP_TYPE_READBACK);
+
+        D3D12_RESOURCE_DESC bufferDesc = {};
+        bufferDesc.Alignment           = 0;
+        bufferDesc.DepthOrArraySize    = 1;
+        bufferDesc.Dimension           = D3D12_RESOURCE_DIMENSION_BUFFER;
+        bufferDesc.Flags               = D3D12_RESOURCE_FLAG_NONE;
+        bufferDesc.Format              = DXGI_FORMAT_UNKNOWN;
+        bufferDesc.Height              = 1;
+        bufferDesc.Width               = fromDesc.Width * fromDesc.Height * GetResourceFormatStride(pResource->GetImpl()->GetTextureResource()->GetFormat());
+        bufferDesc.Layout              = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        bufferDesc.MipLevels           = 1;
+        bufferDesc.SampleDesc.Count    = 1;
+        bufferDesc.SampleDesc.Quality  = 0;
+
+        ID3D12Resource* pResourceReadBack = nullptr;
+        GetDevice()->GetImpl()->DX12Device()->CreateCommittedResource(
+            &readBackHeapProperties, D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&pResourceReadBack));
+
+        CommandList* pCmdList = GetDevice()->CreateCommandList(L"ResourceToFileCL", CommandQueue::Graphics);
+        Barrier      barrier  = Barrier::Transition(pResource, ResourceState::CopyDest, ResourceState::CopySource);
+        ResourceBarrier(pCmdList, 1, &barrier);
+
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout[1]             = {0};
+        uint32_t                           num_rows[1]           = {0};
+        UINT64                             row_sizes_in_bytes[1] = {0};
+        UINT64                             uploadHeapSize        = 0;
+        GetDevice()->GetImpl()->DX12Device()->GetCopyableFootprints(&fromDesc, 0, 1, 0, layout, num_rows, row_sizes_in_bytes, &uploadHeapSize);
+
+        CD3DX12_TEXTURE_COPY_LOCATION copyDest(pResourceReadBack, layout[0]);
+        CD3DX12_TEXTURE_COPY_LOCATION copySrc(pResource->GetImpl()->DX12Resource(), 0);
+        pCmdList->GetImpl()->DX12CmdList()->CopyTextureRegion(&copyDest, 0, 0, 0, &copySrc, nullptr);
+
+        barrier = Barrier::Transition(pResource, ResourceState::CopySource, ResourceState::CopyDest);
+        ResourceBarrier(pCmdList, 1, &barrier);
+
+        ID3D12Fence* pFence;
+        CauldronThrowOnFail(GetDevice()->GetImpl()->DX12Device()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));
+        CauldronThrowOnFail(GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->Signal(pFence, 1));
+        CauldronThrowOnFail(pCmdList->GetImpl()->DX12CmdList()->Close());
+
+        ID3D12CommandList* CmdListList[] = {pCmdList->GetImpl()->DX12CmdList()};
+        GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->ExecuteCommandLists(1, CmdListList);
+
+        // Wait for fence
+        HANDLE mHandleFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        pFence->SetEventOnCompletion(1, mHandleFenceEvent);
+        WaitForSingleObject(mHandleFenceEvent, INFINITE);
+        CloseHandle(mHandleFenceEvent);
+        pFence->Release();
+
+        UINT64*     pTimingsBuffer = NULL;
+        D3D12_RANGE range;
+        range.Begin = 0;
+        range.End   = uploadHeapSize;
+        pResourceReadBack->Map(0, &range, reinterpret_cast<void**>(&pTimingsBuffer));
+        stbi_write_jpg(WStringToString(filePath.c_str()).c_str(), (int)fromDesc.Width, (int)fromDesc.Height, 4, pTimingsBuffer, 100);
+        pResourceReadBack->Unmap(0, NULL);
+
+        GetDevice()->FlushAllCommandQueues();
+
+        // Release
+        pResourceReadBack->Release();
+        pResourceReadBack = nullptr;
+        delete pCmdList;
+    }
+
+
     void SwapChainInternal::DumpSwapChainToFile(filesystem::path filePath)
     {
         D3D12_RESOURCE_DESC fromDesc = m_pRenderTarget->GetCurrentResource()->GetImpl()->DX12Desc();
@@ -209,6 +282,10 @@ namespace cauldron
         CD3DX12_TEXTURE_COPY_LOCATION copyDest(pResourceReadBack, layout[0]);
         CD3DX12_TEXTURE_COPY_LOCATION copySrc(m_pRenderTarget->GetCurrentResource()->GetImpl()->DX12Resource(), 0);
         pCmdList->GetImpl()->DX12CmdList()->CopyTextureRegion(&copyDest, 0, 0, 0, &copySrc, nullptr);
+
+        // Reset the state of the resource
+        barrier = Barrier::Transition(m_pRenderTarget->GetCurrentResource(), ResourceState::CopySource, ResourceState::Present);
+        ResourceBarrier(pCmdList, 1, &barrier);
 
         ID3D12Fence* pFence;
         CauldronThrowOnFail(GetDevice()->GetImpl()->DX12Device()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));

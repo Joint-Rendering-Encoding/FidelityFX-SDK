@@ -89,12 +89,17 @@ def get_config(mode, opts):
     ] = False  # Messes with GPU metrics
 
     if mode != "Upscaler":
-        assert opts.fps == 60 or opts.fps == 30, "FPS must be 60 or 30"
         tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = opts.fps
     else:
-        tmp["FidelityFX FSR"]["FPSLimiter"][
-            "TargetFPS"
-        ] = 60  # We always run the upscaler at 60 FPS
+        # If using frame generation, double the target FPS
+        is_fg = opts.upscaler in ["FSR3", "DLSS"]
+        if is_fg:
+            assert (
+                opts.fps <= 30
+            ), "Frame generation requires an FPS of 30 or less on the renderer"
+        tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = (
+            opts.fps * 2 if is_fg else opts.fps
+        )
 
     # Set the scene exposure
     tmp["FidelityFX FSR"]["Content"]["SceneExposure"] = opts.scene_exposure
@@ -123,10 +128,40 @@ def get_config(mode, opts):
             "AnimatedTexturesRenderModule"
         )
 
+    # Apply the animation configuration
+    spd = 0.002 * 60 / opts.fps
+    if opts.scene == "Sponza":
+        tmp["FidelityFX FSR"]["Content"]["Animation"] = {
+            "Enabled": True,
+            "p": 12.0,
+            "q": 3.0,
+            "xo": 2.0,
+            "yo": 3.0,
+            "zo": 0.0,
+            "spd": spd,
+            "lx": -8.0,
+            "ly": 2.0,
+            "lz": 0.0,
+        }
+    elif opts.scene == "Brutalism":
+        tmp["FidelityFX FSR"]["Content"]["Animation"] = {
+            "Enabled": True,
+            "p": 10.0,
+            "q": 3.0,
+            "xo": 1.0,
+            "yo": 5.0,
+            "zo": -20.0,
+            "spd": spd,
+            "lx": 30.0,
+            "ly": 2.0,
+            "lz": -30.0,
+        }
+
     # Remove content on upscaler if running in detached mode
     if mode == "Upscaler":
         del tmp["FidelityFX FSR"]["Content"]["Scenes"]
         del tmp["FidelityFX FSR"]["Content"]["Camera"]
+        del tmp["FidelityFX FSR"]["Content"]["Animation"]
         del tmp["FidelityFX FSR"]["Content"]["DiffuseIBL"]
         del tmp["FidelityFX FSR"]["Content"]["SpecularIBL"]
 
@@ -233,6 +268,12 @@ def parse_args():
         help="Use the default config, without decoupling the upscaler",
     )
     parser.add_argument(
+        "--screenshot-for-video",
+        action="store_true",
+        default=False,
+        help="Enable screenshot for video mode",
+    )
+    parser.add_argument(
         "--use-release-build",
         action="store_true",
         default=False,
@@ -305,13 +346,18 @@ def main(opts):
         else "FFX_FSR_NATIVE_DX12D.exe"
     )
     process_args = [
-        "-screenshot",
         "-displaymode",
         "DISPLAYMODE_LDR",
         "-benchmark",
         "json",
         f"duration={opts.benchmark * opts.fps}" if opts.benchmark > 0 else "",
     ]
+
+    # For detached mode just get screenshots for upscaler
+    if opts.use_default:
+        process_args.append(
+            "-screenshot-for-video" if opts.screenshot_for_video else "-screenshot"
+        )
 
     # For Native rendering, match the render resolution to the present resolution
     if opts.upscaler == "Native":
@@ -342,6 +388,7 @@ def main(opts):
         print(f"Renderer PID: {renderer.pid}")
 
     # Default mode implies skipping the upscaler
+    skip_upscaler = opts.skip_upscaler
     if opts.use_default:
         opts.skip_upscaler = True
 
@@ -356,6 +403,9 @@ def main(opts):
         # if statement because we may use Visual Studio to debug the upscaler
 
     if not opts.skip_upscaler:
+        process_args.append(
+            "-screenshot-for-video" if opts.screenshot_for_video else "-screenshot"
+        )
         upscaler = subprocess.Popen(
             [os.path.join(FSR_DIR, exe_name), *process_args],
             cwd=FSR_DIR,
@@ -416,15 +466,18 @@ def main(opts):
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
-    # Focus the renderer or upscaler window
-    time.sleep(2)
-    assert focus_by_pid(
-        renderer.pid if opts.use_default else upscaler.pid
-    ), "Could not focus the window"
+    if not skip_upscaler:
+        # Focus the renderer or upscaler window
+        time.sleep(2)
+        assert focus_by_pid(
+            renderer.pid if opts.use_default else upscaler.pid
+        ), "Could not focus the window"
 
-    # In case focus fails, try manual focus
-    pyautogui.moveTo(40, 20)
-    pyautogui.dragRel(500, 500, duration=0.4, tween=pyautogui.easeInOutQuad)
+        # In case focus fails, try manual focus
+        pyautogui.moveTo(40, 20)
+        pyautogui.click()
+        pyautogui.moveTo(120, 20)
+        pyautogui.click()
 
     dots = 0
     start_time = time.time()
@@ -490,6 +543,11 @@ if __name__ == "__main__":
 
     if args.benchmark > 0:
         assert args.benchmark >= 5, "Benchmark duration must be at least 5 seconds"
+
+    if args.compare:
+        assert (
+            not args.screenshot_for_video
+        ), "Cannot use screenshot for video in comparison mode"
 
     # Run with the requested arguments
     test_pid = main(args)

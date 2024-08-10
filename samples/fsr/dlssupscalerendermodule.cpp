@@ -261,7 +261,8 @@ void DLSSUpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS options (%d)", res);
 
     // Get a new frame token
-    slGetNewFrameToken(m_pFrameToken);
+    uint32_t pFrameIndex = GetFramework()->GetFrameID();
+    slGetNewFrameToken(m_pFrameToken, &pFrameIndex);
 
     // Provide common constants
     sl::Constants constants{};

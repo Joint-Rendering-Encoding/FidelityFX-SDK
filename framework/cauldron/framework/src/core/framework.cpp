@@ -1759,7 +1759,7 @@ namespace cauldron
     void Framework::DeleteCommandListAsync(void* pInFlightGPUInfo)
     {
         GPUExecutionPacket* pInflightPacket = static_cast<GPUExecutionPacket*>(pInFlightGPUInfo);
-        uint64_t frameID = GetFrameID();
+        uint64_t lastBufferIndex = m_BufferIndex;
 
         // Wait until the command lists are processed
         m_pDevice->WaitOnQueue(pInflightPacket->CompletionID, CommandQueue::Graphics);
@@ -1771,7 +1771,7 @@ namespace cauldron
         delete pInflightPacket;
 
         // Create save task if needed
-        if (m_Config.TakeScreenshotForVideo)
+        if (m_Config.TakeScreenshotForVideo && m_BufferIndex > 0)
         {
             // Get process PID
             const std::wstring pid = std::to_wstring(GetCurrentProcessId());
@@ -1793,13 +1793,13 @@ namespace cauldron
 
             // Pad the frame number to 5 digits
             std::wstringstream frameID_str;
-            frameID_str << std::setw(5) << std::setfill(L'0') << frameID;
+            frameID_str << std::setw(5) << std::setfill(L'0') << lastBufferIndex - 1; // -1 because we want the frame that just finished
 
             // Add the file extension and path
             outputPath /= frameID_str.str() + L".jpg";
 
             // Dump it out
-            m_pSwapChain->DumpResourceToFile(outputPath, m_vecVideoTextures[(frameID) % m_VideoTextureCount]->GetResource());
+            m_pSwapChain->DumpResourceToFile(outputPath, m_vecVideoTextures[lastBufferIndex % m_VideoTextureCount]->GetResource());
         }
     }
 
@@ -1814,7 +1814,7 @@ namespace cauldron
                                                      ResourceState::Present);
         ResourceBarrier(m_pCmdListForFrame, 1, &presentBarrier);
 
-        if (m_Config.TakeScreenshotForVideo)
+        if (m_Config.TakeScreenshotForVideo && m_BufferIndex > 0)
         {
             // Move to copy source state
             Barrier presentBarrier = Barrier::Transition(
@@ -1822,7 +1822,7 @@ namespace cauldron
             ResourceBarrier(m_pCmdListForFrame, 1, &presentBarrier);
 
             // Copy the back buffer to a texture
-            TextureCopyDesc desc(m_pColorTarget->GetResource(), m_vecVideoTextures[GetFrameID() % m_VideoTextureCount]->GetResource());
+            TextureCopyDesc desc(m_pColorTarget->GetResource(), m_vecVideoTextures[m_BufferIndex % m_VideoTextureCount]->GetResource());
             CopyTextureRegion(m_pCmdListForFrame, &desc);
 
             // Move back to present state

@@ -34,16 +34,16 @@ namespace cauldron
     const wchar_t* CameraComponentMgr::s_ComponentName = L"CameraComponent";
     CameraComponentMgr* CameraComponentMgr::s_pComponentManager = nullptr;
 
-    static Vec4 GetTorusPosition(float p, float q, float xOff, float yOff, float zOff, float totalTime)
+    static Vec4 GetTorusPosition(double p, double q, double xOff, double yOff, double zOff, double totalTime)
     {
-        float r1 = 2.0f;
-        float r2 = 1.0f;
+        double r1 = 2.0f;
+        double r2 = 1.0f;
 
-        float x = (r1 + r2 * cosf(q * totalTime)) * cosf(p * totalTime) + xOff;
-        float y = (r1 + r2 * cosf(q * totalTime)) * sinf(p * totalTime) + yOff;
-        float z = r2 * sinf(q * totalTime) + zOff;
+        double x = (r1 + r2 * cos(q * totalTime)) * cos(p * totalTime) + xOff;
+        double y = (r1 + r2 * cos(q * totalTime)) * sin(p * totalTime) + yOff;
+        double z = r2 * sin(q * totalTime) + zOff;
 
-        return Vec4(x, y, z, 1.f);  
+        return Vec4(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z), 1.f);
     }
 
     CameraComponentMgr::CameraComponentMgr() :
@@ -296,7 +296,7 @@ namespace cauldron
             // Read the next shared data slot
             if (GetFramework()->IsOnlyCapability(FrameworkCapability::Upscaler))
             {
-                uint32_t bufferIndex = GetFramework()->GetBufferIndex();
+                uint64_t bufferIndex = GetFramework()->GetBufferIndex();
                 CauldronAssert(ASSERT_CRITICAL, m_pSharedData[bufferIndex], L"Shared data is not mapped. Cannot read data from shared memory.");
 
                 // Copy the shared data to our local data
@@ -311,16 +311,15 @@ namespace cauldron
                 return;
             }
 
-            // Do animation
-            uint32_t            index     = GetFramework()->GetBufferIndex();
-            CameraAnimationData pAnimData = GetFramework()->GetConfig()->StartupContent.CameraAnimation;
-            if (index != m_LastBufferIndex && pAnimData.enabled)
+            // Do camera animation (if we have any)
             {
-                m_AnimationTime += pAnimData.spd;
-                Vec4 eyePos = GetTorusPosition(pAnimData.p, pAnimData.q, pAnimData.xo, pAnimData.yo, pAnimData.zo, m_AnimationTime);
+                uint64_t            bufferIndex   = GetFramework()->GetBufferIndexMonotonic();
+                CameraAnimationData pAnimData     = GetFramework()->GetConfig()->StartupContent.CameraAnimation;
+                double              animationTime = bufferIndex * pAnimData.spd;
+
+                Vec4 eyePos = GetTorusPosition(pAnimData.p, pAnimData.q, pAnimData.xo, pAnimData.yo, pAnimData.zo, animationTime);
                 Vec4 lookAt = Vec4(pAnimData.lx, pAnimData.ly, pAnimData.lz, 1.f);
                 LookAtActual(eyePos, lookAt);
-                m_LastBufferIndex = index;
             }
 
             // Do camera update (Updates will be made to View matrix - similar to Cauldron 1 - and then pushed up to owner via InvViewMatrix)
@@ -437,7 +436,7 @@ namespace cauldron
             // Transfer the shareable camera data to next slot
             if (GetFramework()->IsOnlyCapability(FrameworkCapability::Renderer))
             {
-                uint32_t bufferIndex = GetFramework()->GetBufferIndex();
+                uint64_t bufferIndex = GetFramework()->GetBufferIndex();
                 CauldronAssert(ASSERT_CRITICAL, m_pSharedData[bufferIndex], L"Shared data is not mapped. Cannot write data to shared memory.");
 
                 // Copy the local data to the shared data

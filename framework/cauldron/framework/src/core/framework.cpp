@@ -1067,6 +1067,7 @@ namespace cauldron
         // GPU timing info is synched to the swapchain and reported with a delay equal to the number of back buffers
         // so we need to set up that delay at the start
         m_PerfFrameCount = -static_cast<int64_t>(m_Config.BackBufferCount);
+        m_BufferIndex = -static_cast<int64_t>(m_Config.BackBufferCount);
     }
 
     void Framework::EnableUpscaling(bool enabled, ResolutionUpdateFunc func/*=nullptr*/)
@@ -1585,7 +1586,7 @@ namespace cauldron
             }
 
             // Update the buffer index
-            m_BufferIndex = (m_BufferIndex + 1) % FSR_REMOTE_SHARED_BUFFER_COUNT;
+            m_BufferIndex++;
         }
 
         m_pCmdListForFrame = m_pDeviceCmdListForFrame;

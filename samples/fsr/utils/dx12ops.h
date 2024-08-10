@@ -36,20 +36,21 @@ public:
         READY,
     };
 
-    bool bufferStateMatches(int bufferIndex, BufferState state)
+    bool bufferStateMatches(uint64_t bufferIndex, BufferState state)
     {
+        CauldronAssert(ASSERT_CRITICAL, bufferIndex < FSR_REMOTE_SHARED_BUFFER_COUNT, L"Invalid buffer index");
         ID3D12Fence* pFence = std::get<1>(p_SharedBuffer[bufferIndex]);
         return pFence->GetCompletedValue() == static_cast<UINT64>(state);
     }
 
     void CreateSharedBuffers(FSRResources pResources, bool shouldCreate = false);
 
-    void TransferToSharedBuffer(FSRResources pResources, int bufferIndex, CommandList* pCmdList)
+    void TransferToSharedBuffer(FSRResources pResources, uint64_t bufferIndex, CommandList* pCmdList)
     {
         PerformTransfer(pResources, bufferIndex, pCmdList, true);
     }
 
-    void TransferFromSharedBuffer(FSRResources pResources, int bufferIndex, CommandList* pCmdList)
+    void TransferFromSharedBuffer(FSRResources pResources, uint64_t bufferIndex, CommandList* pCmdList)
     {
         PerformTransfer(pResources, bufferIndex, pCmdList, false);
     }
@@ -59,5 +60,5 @@ private:
 
     size_t CalculateTotalSize(FSRResources pResources);
 
-    void PerformTransfer(FSRResources pResources, int bufferIndex, CommandList* pCmdList, bool toSharedBuffer);
+    void PerformTransfer(FSRResources pResources, uint64_t bufferIndex, CommandList* pCmdList, bool toSharedBuffer);
 };

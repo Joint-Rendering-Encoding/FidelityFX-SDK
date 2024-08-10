@@ -52,7 +52,7 @@ void FSRRemoteRenderModule::Init(const json& initData)
 
         // The framework will run MainLoop based on the outcome of this function
         GetFramework()->SetReadyFunction([this]() {
-            uint32_t bufferIndex = GetFramework()->GetBufferIndex();
+            uint64_t bufferIndex = GetFramework()->GetBufferIndex();
             if (!m_UpscalerModeEnabled)
                 return m_DX12Ops->bufferStateMatches(bufferIndex, DX12Ops::BufferState::IDLE);
             else
@@ -122,7 +122,7 @@ void FSRRemoteRenderModule::InboundDataTransfer(double deltaTime, CommandList* p
 
     // Main loop never runs if there is no available buffer, so we can assume next buffer is in READY state
     // Transfer the resources from the shared buffer to this process
-    uint32_t bufferIndex = GetFramework()->GetBufferIndex();
+    uint64_t bufferIndex = GetFramework()->GetBufferIndex();
     m_DX12Ops->TransferFromSharedBuffer(getFSRResources(), bufferIndex, pCmdList);
 }
 
@@ -132,6 +132,6 @@ void FSRRemoteRenderModule::OutboundDataTransfer(double deltaTime, CommandList* 
 
     // Main loop never runs if there is no available buffer, so we can assume next buffer is in IDLE state
     // Transfer the resources from this process to the shared buffer
-    uint32_t bufferIndex = GetFramework()->GetBufferIndex();
+    uint64_t bufferIndex = GetFramework()->GetBufferIndex();
     m_DX12Ops->TransferToSharedBuffer(getFSRResources(), bufferIndex, pCmdList);
 }

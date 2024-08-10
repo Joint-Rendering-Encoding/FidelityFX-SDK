@@ -261,7 +261,7 @@ void DLSSUpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS options (%d)", res);
 
     // Get a new frame token
-    uint32_t pFrameIndex = GetFramework()->GetFrameID();
+    uint32_t pFrameIndex = static_cast<uint32_t>(GetFramework()->GetFrameID());
     slGetNewFrameToken(m_pFrameToken, &pFrameIndex);
 
     // Provide common constants
@@ -305,7 +305,7 @@ void DLSSUpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     const sl::BaseStructure* inputs[] = {&m_Viewport};
 
     res = slEvaluateFeature(sl::kFeatureDLSS, *m_pFrameToken, inputs, _countof(inputs), pCmdList->GetImpl()->DX12CmdList());
-    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to evaluate DLSS (%d)", res);
+    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to evaluate DLSS (%d)", res);  
 
     // Transition color target back to pixel shader resource
     barriers.clear();

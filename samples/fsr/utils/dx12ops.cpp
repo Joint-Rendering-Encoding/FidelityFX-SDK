@@ -76,8 +76,10 @@ void DX12Ops::CreateSharedBuffers(FSRResources pResources, bool shouldCreate)
     }
 }
 
-void DX12Ops::PerformTransfer(FSRResources pResources, int bufferIndex, CommandList* pCmdList, bool toSharedBuffer)
+void DX12Ops::PerformTransfer(FSRResources pResources, uint64_t bufferIndex, CommandList* pCmdList, bool toSharedBuffer)
 {
+    CauldronAssert(ASSERT_CRITICAL, bufferIndex < FSR_REMOTE_SHARED_BUFFER_COUNT, L"Invalid buffer index");
+
     // Get the device and command list
     ID3D12Resource*             pSharedResource = std::get<0>(p_SharedBuffer[bufferIndex]);
     ID3D12Fence*                pSharedFence    = std::get<1>(p_SharedBuffer[bufferIndex]);

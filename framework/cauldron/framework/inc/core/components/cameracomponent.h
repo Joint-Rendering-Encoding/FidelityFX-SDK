@@ -98,7 +98,8 @@ namespace cauldron
     struct CameraAnimationData
     {
         bool  enabled = false;
-        float p, q, xo, yo, zo, spd, lx, ly, lz;
+        double p, q, xo, yo, zo, spd;
+        float lx, ly, lz;
     };
 
     /**
@@ -397,10 +398,6 @@ namespace cauldron
     protected:
         // Keep a pointer on our initialization data for matrix reconstruction
         CameraComponentData*    m_pData;
-
-        // Animation related data
-        float m_AnimationTime = 0.f;
-        uint32_t m_LastBufferIndex = -1;
 
         // Shared data handle and view
         HANDLE   m_hSharedData = nullptr;

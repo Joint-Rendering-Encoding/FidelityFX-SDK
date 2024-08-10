@@ -189,7 +189,7 @@ int32_t FSRSample::DoSampleInit()
             const ResolutionInfo& resInfo          = GetFramework()->GetResolutionInfo();
             const int32_t         jitterPhaseCount = ffxFsr3GetJitterPhaseCount(resInfo.RenderWidth, resInfo.DisplayWidth);
             float                 m_JitterX, m_JitterY;
-            ffxFsr3GetJitterOffset(&m_JitterX, &m_JitterY, GetBufferIndex(), jitterPhaseCount);
+            ffxFsr3GetJitterOffset(&m_JitterX, &m_JitterY, static_cast<int32_t>(GetBufferIndexMonotonic()), jitterPhaseCount);
 
             values = Vec2(-2.f * m_JitterX / resInfo.RenderWidth, 2.f * m_JitterY / resInfo.RenderHeight);
         };

@@ -604,9 +604,20 @@ namespace cauldron
         void     GetUpscaledRenderInfo(uint32_t& width, uint32_t& height, float& renderWidthRatio, float& renderHeightRatio) const;
 
         /**
-         * @brief   Gets the current buffer index.
+         * @brief   Gets the current buffer index. Starts at 0 and increases monotonically.
          */
-        uint32_t GetBufferIndex() const { return m_BufferIndex; }
+        uint64_t GetBufferIndexMonotonic() const
+        {
+            return static_cast<uint64_t>(std::max(m_BufferIndex, (int64_t)0));
+        }
+
+        /**
+         * @brief   Gets the current buffer index. Starts at 0 with mod FSR_REMOTE_SHARED_BUFFER_COUNT.
+         */
+        uint64_t GetBufferIndex() const
+        {
+            return GetBufferIndexMonotonic() % FSR_REMOTE_SHARED_BUFFER_COUNT;
+        }
 
         /**
          * @brief   Gets the current frame time slice.
@@ -757,7 +768,7 @@ namespace cauldron
         // Time/Frame management
         std::chrono::time_point<std::chrono::system_clock> m_LoadingStartTime;
         std::chrono::time_point<std::chrono::system_clock> m_LastFrameTime;
-        uint32_t                m_BufferIndex = 0;
+        int64_t                 m_BufferIndex = 0;
         double                  m_DeltaTime = 0.0;
         uint64_t                m_FrameID   = -1;               // Start at -1 so that the first frame is 0 (as we increment on begin frame)
         CommandList*            m_pCmdListForFrame = nullptr;  // Valid between Begin/EndFrame only

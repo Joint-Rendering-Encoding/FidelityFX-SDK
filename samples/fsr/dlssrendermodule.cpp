@@ -186,7 +186,7 @@ void DLSSRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to set DLSS options (%d)", res);
 
     // Get a new frame token
-    uint32_t pFrameIndex = GetFramework()->GetFrameID();
+    uint32_t pFrameIndex = static_cast<uint32_t>(GetFramework()->GetFrameID());
     slGetNewFrameToken(m_pFrameToken, &pFrameIndex);
 
     // Sleep with Reflex

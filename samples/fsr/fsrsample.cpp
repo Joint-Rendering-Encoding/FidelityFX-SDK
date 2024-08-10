@@ -187,7 +187,8 @@ int32_t FSRSample::DoSampleInit()
         CameraJitterCallback jitterCallback = [this](Vec2& values) {
             // Update FSR3 jitter for built in TAA
             const ResolutionInfo& resInfo          = GetFramework()->GetResolutionInfo();
-            const int32_t         jitterPhaseCount = ffxFsr3GetJitterPhaseCount(resInfo.RenderWidth, resInfo.DisplayWidth);
+            // Using the first 10 phases for now. Beyond that has some issues with frame generation
+            const int32_t         jitterPhaseCount = 10;  // ffxFsr3GetJitterPhaseCount(resInfo.RenderWidth, resInfo.DisplayWidth);
             float                 m_JitterX, m_JitterY;
             ffxFsr3GetJitterOffset(&m_JitterX, &m_JitterY, static_cast<int32_t>(GetBufferIndexMonotonic()), jitterPhaseCount);
 

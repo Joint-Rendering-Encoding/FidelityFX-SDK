@@ -194,8 +194,17 @@ void DLSSRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to sleep with Reflex (%d)", res);
 
     // Ping PCL
-    res = slPCLSetMarker(sl::PCLMarker::ePCLatencyPing, *m_pFrameToken);
-    CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to ping PCL (%d)", res);
+    if (GetFramework()->GetBufferIndexMonotonic() > 1)
+    {
+        res = slPCLSetMarker(sl::PCLMarker::ePresentEnd, *m_pFrameToken);
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to ping PCL (%d)", res);
+    }
+    
+    if (GetFramework()->GetBufferIndexMonotonic() > 0)
+    {
+        res = slPCLSetMarker(sl::PCLMarker::ePresentStart, *m_pFrameToken);
+        CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to ping PCL (%d)", res);
+    }
 
     SetAllResourceViewHeaps(pCmdList);
 }

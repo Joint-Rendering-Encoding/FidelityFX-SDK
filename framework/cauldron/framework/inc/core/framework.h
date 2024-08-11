@@ -787,12 +787,6 @@ namespace cauldron
         int64_t                                            m_PerfFrameCount{INT64_MIN};
         std::chrono::time_point<std::chrono::steady_clock> m_StartTime;
         std::chrono::time_point<std::chrono::steady_clock> m_StopTime = std::chrono::time_point<std::chrono::steady_clock>::max();
-        
-        // Textures for video, pre-allocated textures
-        std::vector<const Texture*> m_vecVideoTextures;
-        uint32_t                    m_VideoTextureCount = 100;
-        const Texture*              m_pColorTarget      = nullptr;
-
 
         // Graphics sub-systems
         Device*                 m_pDevice                = nullptr;

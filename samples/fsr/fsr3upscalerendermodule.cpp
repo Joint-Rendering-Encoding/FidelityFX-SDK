@@ -344,7 +344,7 @@ void FSR3UpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     dispatchParameters.jitterOffset.y         = -pCamera->GetJitter(resInfo.RenderWidth, resInfo.RenderHeight).getY();
     dispatchParameters.motionVectorScale.x    = resInfo.fRenderWidth();
     dispatchParameters.motionVectorScale.y    = resInfo.fRenderHeight();
-    dispatchParameters.reset                  = false;
+    dispatchParameters.reset                  = GetFramework()->GetResetFlag();
     dispatchParameters.enableSharpening       = m_RCASSharpen;
     dispatchParameters.sharpness              = m_Sharpness;
 

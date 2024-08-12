@@ -348,9 +348,10 @@ def close_by_pid(pid):
     return False
 
 
-def get_process_args(video=False, duration=0, is_default=False, has_fg=False):
+def get_process_args(mode, video=False, duration=0, has_fg=False):
+    screenshot = "-screenshot-for-video" if video else "-screenshot"
     process_args = [
-        "-screenshot-for-video" if video else "-screenshot",
+        screenshot if mode != "Renderer" else "",
         "-displaymode",
         "DISPLAYMODE_LDR",
         "-benchmark",
@@ -358,10 +359,12 @@ def get_process_args(video=False, duration=0, is_default=False, has_fg=False):
     ]
 
     if duration > 0:
-        if not is_default and has_fg:
+        if mode != "Default" and has_fg:
             # BUG: Upscaler gets blocked for buffer count. Running for 10 more frames to avoid this.
             # Weird thing is that this is only needed for frame generation upscalers.
-            duration += FSR_REMOTE_SHARED_BUFFER_COUNT
+            #! Might only be needed if FSR_REMOTE_SHARED_BUFFER_COUNT is more than 1
+            # duration += FSR_REMOTE_SHARED_BUFFER_COUNT
+            pass
         process_args.append(f"duration={duration}")
     return process_args
 
@@ -394,9 +397,9 @@ def main(opts):
         [
             os.path.join(FSR_DIR, exe_name),
             *get_process_args(
+                mode,
                 video=opts.screenshot_for_video,
                 duration=opts.benchmark * opts.fps,
-                is_default=opts.use_default,
                 has_fg=opts.upscaler in FRAME_GENERATION,
             ),
         ],
@@ -430,9 +433,9 @@ def main(opts):
             [
                 os.path.join(FSR_DIR, exe_name),
                 *get_process_args(
+                    "Upscaler",
                     video=opts.screenshot_for_video,
                     duration=opts.benchmark * opts.fps,
-                    is_default=opts.use_default,
                     has_fg=opts.upscaler in FRAME_GENERATION,
                 ),
             ],
@@ -496,7 +499,7 @@ def main(opts):
 
     if not skip_upscaler:
         # Focus the renderer or upscaler window
-        time.sleep(2)
+        time.sleep(4)
         focus_by_pid(renderer.pid if opts.use_default else upscaler.pid)
 
         # In case focus fails, try manual focus
@@ -532,7 +535,11 @@ def main(opts):
             )
 
         # Bail out if test is taking too long
-        if opts.benchmark > 0 and time.time() - start_time > opts.benchmark + 15:
+        if (
+            opts.benchmark > 0
+            and time.time() - start_time > opts.benchmark + 15
+            and not opts.screenshot_for_video
+        ):
             cleanup(None, None, non_zero=True)
             break
 

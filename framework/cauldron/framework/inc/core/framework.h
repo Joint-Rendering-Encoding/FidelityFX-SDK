@@ -695,6 +695,16 @@ namespace cauldron
          */
         bool CanExecuteMainLoop() { return m_ReadyForNext(); }
 
+        /**
+         * @brief    Set the reset flag
+         */
+        void SetResetFlag(bool reset) { m_ResetFlag = reset; }
+
+        /**
+         * @brief    Get the reset flag
+         */
+        bool GetResetFlag() const { return m_ResetFlag; }
+
     private:
         friend class FrameworkInternal;
         Framework() = delete;
@@ -768,10 +778,14 @@ namespace cauldron
         // Time/Frame management
         std::chrono::time_point<std::chrono::system_clock> m_LoadingStartTime;
         std::chrono::time_point<std::chrono::system_clock> m_LastFrameTime;
-        int64_t                 m_BufferIndex = 0;
-        double                  m_DeltaTime = 0.0;
-        uint64_t                m_FrameID   = -1;               // Start at -1 so that the first frame is 0 (as we increment on begin frame)
-        CommandList*            m_pCmdListForFrame = nullptr;  // Valid between Begin/EndFrame only
+
+        int64_t      m_BenchmarkLeadFrameCount = 60;
+        int64_t      m_BenchmarkLeadFrames     = m_BenchmarkLeadFrameCount;
+        bool         m_ResetFlag               = false;
+        int64_t      m_BufferIndex             = 0;
+        double       m_DeltaTime               = 0.0;
+        uint64_t     m_FrameID                 = -1;       // Start at -1 so that the first frame is 0 (as we increment on begin frame)
+        CommandList* m_pCmdListForFrame        = nullptr;  // Valid between Begin/EndFrame only
 
         CommandList*                                       m_pDeviceCmdListForFrame = nullptr;    // Valid between Begin/EndFrame only
         std::vector<CommandList*>                          m_vecCmdListsForFrame;                 // Valid between Begin/EndFrame only

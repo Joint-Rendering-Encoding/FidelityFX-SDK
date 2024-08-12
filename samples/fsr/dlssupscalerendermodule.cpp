@@ -268,9 +268,9 @@ void DLSSUpscaleRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     sl::Constants constants{};
     constants.mvecScale              = {1.0, 1.0};
     constants.jitterOffset           = {-pCamera->GetJitter(resInfo.RenderWidth, resInfo.RenderHeight).getX(), -pCamera->GetJitter(resInfo.RenderWidth, resInfo.RenderHeight).getY()};
-    constants.depthInverted          = GetConfig()->InvertedDepth ? sl::Boolean::eTrue : sl::Boolean::eFalse;
+    constants.depthInverted          = static_cast<sl::Boolean>(GetConfig()->InvertedDepth);
     constants.cameraPinholeOffset    = {0.0f, 0.0f};
-    constants.reset                  = sl::Boolean::eFalse;
+    constants.reset                  = static_cast<sl::Boolean>(GetFramework()->GetResetFlag());
     constants.motionVectors3D        = sl::Boolean::eFalse;
     constants.orthographicProjection = sl::Boolean::eFalse;
     constants.motionVectorsDilated   = sl::Boolean::eFalse;

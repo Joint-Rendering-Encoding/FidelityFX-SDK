@@ -1464,7 +1464,8 @@ namespace cauldron
             CPUScopedProfileCapture marker(L"SavePreviousFrame");
             if (m_BufferIndex > 0)
             {
-                if (m_Config.TakeScreenshotForVideo && --m_BenchmarkLeadFrames <= 0)
+                m_BenchmarkLeadFrames--;
+                if (m_Config.TakeScreenshotForVideo && m_BenchmarkLeadFrames < 0)
                 {
                     // Reset the upscalers' temporal information
                     SetResetFlag(m_BenchmarkLeadFrames == 0);

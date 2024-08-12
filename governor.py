@@ -405,14 +405,23 @@ def main(opts):
             ),
         ],
         cwd=FSR_DIR,
-        stdout=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL,
     )
     if opts.structured_logs:
         print("RENDERER_PID", renderer.pid)
+        sys.stdout.flush()
     else:
         print(f"Renderer PID: {renderer.pid}")
+
+    # Wait until the renderer is ready
+    os.set_blocking(renderer.stdout.fileno(), False)
+    while True:
+        line = renderer.stdout.readline()
+        if b"Running" in line:
+            break
+        time.sleep(0.1)
 
     # Default mode implies skipping the upscaler
     skip_upscaler = opts.skip_upscaler
@@ -441,14 +450,23 @@ def main(opts):
                 ),
             ],
             cwd=FSR_DIR,
-            stdout=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
         )
         if opts.structured_logs:
             print("UPSCALER_PID", upscaler.pid)
+            sys.stdout.flush()
         else:
             print(f"Upscaler PID: {upscaler.pid}")
+
+        # Wait until the upscaler is ready
+        os.set_blocking(upscaler.stdout.fileno(), False)
+        while True:
+            line = upscaler.stdout.readline()
+            if b"Running" in line:
+                break
+            time.sleep(0.1)
 
     # Register signal handlers
     def cleanup(sig, _, non_zero=False):
@@ -472,10 +490,13 @@ def main(opts):
             time.sleep(0.1)
 
         # Kill the processes if they are still running
+        had_force_kill = False
         if renderer.poll() is None:
+            had_force_kill = True
             renderer.kill()
 
         if not opts.skip_upscaler and upscaler.poll() is None:
+            had_force_kill = True
             upscaler.kill()
 
         # Exit with the appropriate code
@@ -483,10 +504,8 @@ def main(opts):
             sys.exit(1)
 
         if not opts.compare:
-            if renderer.returncode != 0 or (
-                not opts.skip_upscaler and upscaler.returncode != 0
-            ):
-                sys.exit(1)
+            if had_force_kill:
+                sys.exit(2)
             else:
                 sys.exit(0)
 
@@ -500,8 +519,10 @@ def main(opts):
 
     if not skip_upscaler:
         # Focus the renderer or upscaler window
-        time.sleep(4)
-        focus_by_pid(renderer.pid if opts.use_default else upscaler.pid)
+        assert focus_by_pid(renderer.pid if opts.use_default else upscaler.pid), (
+            "Could not focus the window. "
+            "Please make sure the window is visible and not minimized."
+        )
 
         # In case focus fails, try manual focus
         pyautogui.moveTo(40, 20)
@@ -513,6 +534,7 @@ def main(opts):
     start_time = time.time()
     if opts.structured_logs:
         print("TEST_START", utcnow_iso8601())
+        sys.stdout.flush()
     while True:
         # Check if the renderer is still running
         if renderer.poll() is not None:
@@ -558,6 +580,7 @@ def main(opts):
 
     if opts.structured_logs:
         print("TEST_END", utcnow_iso8601())
+        sys.stdout.flush()
     else:
         print()
         print("Process(es) finished")

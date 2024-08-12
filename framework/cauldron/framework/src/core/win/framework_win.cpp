@@ -28,6 +28,7 @@
 #include "render/swapchain.h"
 
 #include <windowsx.h>
+#include <iostream>
 
 using namespace std::experimental;
 
@@ -318,6 +319,9 @@ namespace cauldron
 
         // Everything is now initialized and we are entering the "running" state
         m_pFramework->m_Running.store(true);
+
+        // Write to stdout that we are running
+        std::wcout << L"Running " << m_pFramework->m_Name << std::endl;
 
         // Main loop
         MSG msg = { 0 };

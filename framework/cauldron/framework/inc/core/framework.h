@@ -612,12 +612,17 @@ namespace cauldron
         }
 
         /**
-         * @brief   Gets the current buffer index. Starts at 0 with mod FSR_REMOTE_SHARED_BUFFER_COUNT.
+         * @brief   Gets the current buffer index. Starts at 0 with mod m_BufferCount.
          */
         uint64_t GetBufferIndex() const
         {
-            return GetBufferIndexMonotonic() % FSR_REMOTE_SHARED_BUFFER_COUNT;
+            return GetBufferIndexMonotonic() % m_BufferCount;
         }
+
+        /**
+         * @brief   Gets the buffer count.
+         */
+        uint64_t GetBufferCount() const { return m_BufferCount; }
 
         /**
          * @brief   Gets the current frame time slice.
@@ -783,6 +788,7 @@ namespace cauldron
         int64_t      m_BenchmarkLeadFrames     = m_BenchmarkLeadFrameCount;
         bool         m_ResetFlag               = false;
         int64_t      m_BufferIndex             = 0;
+        uint64_t     m_BufferCount             = 10;
         double       m_DeltaTime               = 0.0;
         uint64_t     m_FrameID                 = -1;       // Start at -1 so that the first frame is 0 (as we increment on begin frame)
         CommandList* m_pCmdListForFrame        = nullptr;  // Valid between Begin/EndFrame only

@@ -362,7 +362,8 @@ def get_process_args(mode, video=False, duration=0, has_fg=False):
         if mode != "Default" and has_fg:
             # BUG: Upscaler gets blocked for buffer count. Running for 10 more frames to avoid this.
             # Weird thing is that this is only needed for frame generation upscalers.
-            #! Might only be needed if FSR_REMOTE_SHARED_BUFFER_COUNT is more than 1
+            #! Might only be needed if FSR_REMOTE_SHARED_BUFFER_COUNT (m_BufferIndex) is more than 1
+            # For video, we set it to 1 anyway.
             # duration += FSR_REMOTE_SHARED_BUFFER_COUNT
             pass
         process_args.append(f"duration={duration}")

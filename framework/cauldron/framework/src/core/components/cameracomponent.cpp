@@ -145,15 +145,15 @@ namespace cauldron
 
         // Create or open the shared memory file mapping
         m_hSharedData = CreateFileMapping(
-            INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(ShareableCameraData) * FSR_REMOTE_SHARED_BUFFER_COUNT, sharedDataName.str().c_str());
+            INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(ShareableCameraData) * GetFramework()->GetBufferCount(), sharedDataName.str().c_str());
         CauldronAssert(ASSERT_CRITICAL, m_hSharedData, L"Failed to create shared data file mapping: %d", GetLastError());
 
         // Map the shared memory file mapping into our address space
-        m_pSharedView = MapViewOfFile(m_hSharedData, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(ShareableCameraData) * FSR_REMOTE_SHARED_BUFFER_COUNT);
+        m_pSharedView = MapViewOfFile(m_hSharedData, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(ShareableCameraData) * GetFramework()->GetBufferCount());
         CauldronAssert(ASSERT_CRITICAL, m_pSharedData, L"Failed to map shared data file mapping: %d", GetLastError());
 
         // Initialize shared data, if not already done
-        for (size_t i = 0; i < FSR_REMOTE_SHARED_BUFFER_COUNT; i++)
+        for (size_t i = 0; i < GetFramework()->GetBufferCount(); i++)
         {
             if (m_pSharedData[i] == nullptr)
                 m_pSharedData[i] = reinterpret_cast<ShareableCameraData*>(reinterpret_cast<uint8_t*>(m_pSharedView) + (sizeof(ShareableCameraData) * i));
@@ -166,7 +166,7 @@ namespace cauldron
         {
             UnmapViewOfFile(m_pSharedView);
             m_pSharedView = nullptr;
-            for (size_t i = 0; i < FSR_REMOTE_SHARED_BUFFER_COUNT; i++)
+            for (size_t i = 0; i < GetFramework()->GetBufferCount(); i++)
                 m_pSharedData[i] = nullptr;
         }
 

@@ -1325,6 +1325,7 @@ namespace cauldron
             if (command == L"-screenshot-for-video")
             {
                 m_Config.TakeScreenshotForVideo = true;
+                m_BufferCount = 1; // Force single buffer count for video capture
                 continue;
             }
 

@@ -402,7 +402,7 @@ namespace cauldron
         // Shared data handle and view
         HANDLE   m_hSharedData = nullptr;
         LPVOID   m_pSharedView = nullptr;
-        ShareableCameraData* m_pSharedData[FSR_REMOTE_SHARED_BUFFER_COUNT] = {nullptr};
+        ShareableCameraData* m_pSharedData[FSR_REMOTE_SHARED_BUFFER_MAX] = {nullptr};
 
         const Mat4  m_ResetMatrix = Mat4::identity(); // Used to reset camera to initial state
         float       m_Distance = 1.f;                 // Distance to look at

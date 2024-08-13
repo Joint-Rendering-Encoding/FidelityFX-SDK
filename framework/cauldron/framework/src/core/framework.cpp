@@ -1465,7 +1465,7 @@ namespace cauldron
             if (m_BufferIndex > 0)
             {
                 m_BenchmarkLeadFrames--;
-                if (m_Config.TakeScreenshotForVideo && m_BenchmarkLeadFrames < 0)
+                if (m_Config.TakeScreenshotForVideo && m_BenchmarkLeadFrames <= 0)
                 {
                     // Reset the upscalers' temporal information
                     SetResetFlag(m_BenchmarkLeadFrames == 0);
@@ -1699,7 +1699,7 @@ namespace cauldron
                         }
                         m_PerfFrameCount = 1;
                     }
-                    else if (m_BenchmarkLeadFrames <= 0)
+                    else
                     {
                         // update stats
                         for (size_t i = 0; i < cpuTimings.size(); i++)
@@ -1893,7 +1893,7 @@ namespace cauldron
         // Stop running if the perf dump timer ran out
         // If no timer is set, the stop time is UINT32_MAX, which should be high enough to not occur with normal operation
         // (it would take 50 days at 1000 FPS)
-        if (m_PerfFrameCount == m_Config.BenchmarkFrameDuration + extraFrames)
+        if (m_PerfFrameCount - m_BenchmarkLeadFrameCount == m_Config.BenchmarkFrameDuration + extraFrames)
         {
             m_StopTime = std::chrono::steady_clock::now();
 

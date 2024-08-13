@@ -490,24 +490,31 @@ def main(opts):
             time.sleep(0.1)
 
         # Kill the processes if they are still running
-        had_force_kill = False
         if renderer.poll() is None:
-            had_force_kill = True
             renderer.kill()
 
         if not opts.skip_upscaler and upscaler.poll() is None:
-            had_force_kill = True
             upscaler.kill()
 
         # Exit with the appropriate code
         if non_zero:
             sys.exit(1)
 
+        # Get the return codes
+        return_codes = {
+            "renderer": renderer.returncode,
+            "upscaler": upscaler.returncode if not opts.skip_upscaler else None,
+        }
+
+        if not opts.structured_logs:
+            print("Return codes:")
+            print(json.dumps(return_codes, indent=4))
+
         if not opts.compare:
-            if had_force_kill:
-                sys.exit(2)
-            else:
-                sys.exit(0)
+            for value in return_codes.values():
+                if value is not None and value != 0:
+                    sys.exit(value)
+            sys.exit(0)
 
         if opts.compare and sig is not None:
             print(

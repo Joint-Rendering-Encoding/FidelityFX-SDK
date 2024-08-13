@@ -74,15 +74,15 @@ void FSRSample::PostDeviceInit()
 
 void FSRSample::Shutdown()
 {
+    // Call the base class shutdown
+    Framework::Shutdown();
+
     if (HasCapability(FrameworkCapability::Upscaler))
     {
         // Cleanup
         sl::Result res = slShutdown();
         CauldronAssert(ASSERT_CRITICAL, res == sl::Result::eOk, L"Failed to shutdown DLSS");
     }
-
-    // Call the base class shutdown
-    Framework::Shutdown();
 }
 
 // Read in sample-specific configuration parameters.

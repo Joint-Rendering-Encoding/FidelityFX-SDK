@@ -92,7 +92,7 @@ def get_config(mode, opts):
         "UseGPULimiter"
     ] = False  # Messes with GPU metrics
 
-    if mode != "Upscaler":
+    if mode == "Renderer":
         tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = opts.fps
     else:
         # If using frame generation, double the target FPS
@@ -100,7 +100,7 @@ def get_config(mode, opts):
         if is_fg:
             assert (
                 opts.fps <= 30
-            ), "Frame generation requires an FPS of 30 or less on the renderer"
+            ), "Frame generation requires an render FPS of 30 or less"
         tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = (
             opts.fps * 2 if is_fg else opts.fps
         )

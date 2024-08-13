@@ -701,6 +701,16 @@ namespace cauldron
         bool CanExecuteMainLoop() { return m_ReadyForNext(); }
 
         /**
+         * @brief    Set the function that determines if the framework can exit or not
+         */
+        void SetCanExitFunction(std::function<bool()> fn) { m_CanExit = fn; }
+
+        /**
+         * @brief    Check if the framework can exit or not
+         */
+        bool CanExit() { return m_CanExit(); }
+
+        /**
          * @brief    Set the reset flag
          */
         void SetResetFlag(bool reset) { m_ResetFlag = reset; }
@@ -770,6 +780,7 @@ namespace cauldron
         FrameCaptureState     m_RenderDocCaptureState     = FrameCaptureState::None;
         FrameCaptureState     m_PixCaptureState           = FrameCaptureState::None;
         std::function<bool()> m_ReadyForNext              = []() { return true; };
+        std::function<bool()> m_CanExit                   = []() { return true; };
 
         // Task Manager for background tasks
         TaskManager*            m_pTaskManager = nullptr;

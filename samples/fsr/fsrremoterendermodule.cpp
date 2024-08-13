@@ -53,10 +53,18 @@ void FSRRemoteRenderModule::Init(const json& initData)
         // The framework will run MainLoop based on the outcome of this function
         GetFramework()->SetReadyFunction([this]() {
             uint64_t bufferIndex = GetFramework()->GetBufferIndex();
-            if (!m_UpscalerModeEnabled)
+            if (m_RendererModeEnabled)
                 return m_DX12Ops->bufferStateMatches(bufferIndex, DX12Ops::BufferState::IDLE);
             else
                 return m_DX12Ops->bufferStateMatches(bufferIndex, DX12Ops::BufferState::READY);
+        });
+    }
+
+    if (m_RendererModeEnabled)
+    {
+        // The framework will only exit if there's no buffer to consume anymore
+        GetFramework()->SetCanExitFunction([this]() {
+            return m_DX12Ops->bufferStateMatchesAll(DX12Ops::BufferState::IDLE);
         });
     }
 

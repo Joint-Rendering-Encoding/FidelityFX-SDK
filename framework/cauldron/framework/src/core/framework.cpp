@@ -610,6 +610,13 @@ namespace cauldron
             }
         }
 
+        // Special case for detached mode, we have to wait for all buffers to be consumed before we can exit
+        if (IsOnlyCapability(FrameworkCapability::Renderer))
+        {
+            while (!CanExit())
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+
         // Terminate the task manager
         m_pTaskManager->Shutdown();
 
@@ -1325,7 +1332,6 @@ namespace cauldron
             if (command == L"-screenshot-for-video")
             {
                 m_Config.TakeScreenshotForVideo = true;
-                m_BufferCount = 1; // Force single buffer count for video capture
                 continue;
             }
 
@@ -1457,99 +1463,6 @@ namespace cauldron
     {
         // Skip frame if we are currently loading content
         if (m_pContentManager->IsCurrentlyLoading()) return;
-
-        // Save the previously rendered frame
-        // This is placed here because otherwise the frame might have some artifacts
-        {
-            CPUScopedProfileCapture marker(L"SavePreviousFrame");
-            if (m_BufferIndex > 0)
-            {
-                m_BenchmarkLeadFrames--;
-                if (m_Config.TakeScreenshotForVideo && m_BenchmarkLeadFrames <= 0)
-                {
-                    // Reset the upscalers' temporal information
-                    SetResetFlag(m_BenchmarkLeadFrames == 0);
-
-                    // Get process PID
-                    const std::wstring pid = std::to_wstring(GetCurrentProcessId());
-
-                    // If we are bencharmking, use the benchmarking path
-                    filesystem::path outputPath;
-                    if (m_Config.EnableBenchmark)
-                    {
-                        outputPath = m_Config.BenchmarkPath + L"\\" + pid + L"\\";
-                    }
-                    else
-                    {
-                        outputPath = L"screenshots\\" + pid + L"\\";
-                    }
-
-                    // Defensive, in case path doesn't exist
-                    if (!outputPath.empty())
-                        filesystem::create_directories(outputPath);
-
-                    // Pad the frame number to 5 digits
-                    std::wstringstream frameID_str;
-                    frameID_str << std::setw(5) << std::setfill(L'0') << m_BufferIndex - m_BenchmarkLeadFrameCount + 1;  // 1-based index
-
-                    // Add the file extension and path
-                    outputPath /= frameID_str.str() + L".jpg";
-
-                    // Dump it out
-                    m_pSwapChain->DumpSwapChainToFile(outputPath);
-                }
-                // If we are benchmarking and need to take a screen shot, dump the last frame out to file
-                else if (m_Config.TakeScreenshot && m_BufferIndex == m_Config.BenchmarkFrameDuration)
-                {
-                    // If we are bencharmking, use the benchmarking path
-                    filesystem::path outputPath;
-                    if (m_Config.EnableBenchmark)
-                    {
-                        outputPath = m_Config.BenchmarkPath;
-                    }
-                    else
-                    {
-                        outputPath = L"screenshots\\";
-                    }
-
-                    // Defensive, in case path doesn't exist
-                    if (!outputPath.empty())
-                        filesystem::create_directory(outputPath);
-
-                    // Get process PID
-                    const std::wstring pid = std::to_wstring(GetCurrentProcessId());
-
-                    // Make a file name that is unique (sample name exe + permutations of interest + time stamp to seconds)
-                    std::wstringstream fileName;
-                    fileName << m_Name << '_' << pid;
-
-                    // Add resolution
-                    const ResolutionInfo& resInfo = GetFramework()->GetResolutionInfo();
-                    fileName << '_' << resInfo.RenderWidth << 'x' << resInfo.RenderHeight;
-                    fileName << '_' << resInfo.DisplayWidth << 'x' << resInfo.DisplayHeight;
-
-                    // Add permutations to file name for further identification
-                    for (auto& permutation : m_Config.BenchmarkPermutationOptions)
-                    {
-                        fileName << '_' << permutation.second;
-                    }
-
-#pragma warning(push)
-#pragma warning(disable : 4996)  // Avoid deprecation warning on std::localtime
-                    auto now       = std::chrono::system_clock::now();
-                    auto in_time_t = std::chrono::system_clock::to_time_t(now);
-                    fileName << '_' << std::put_time(std::localtime(&in_time_t), L"%Y-%m-%d-%H-%M-%S") << L".jpg";
-                    outputPath.append(fileName.str());
-#pragma warning(pop)
-
-                    if (m_Config.EnableBenchmark)
-                        m_Config.ScreenShotFileName = outputPath;
-
-                    // Dump it out
-                    m_pSwapChain->DumpSwapChainToFile(outputPath);
-                }
-            }
-        }
 
         // Before doing component/render module updates, offer samples the chance to do any updates
         {
@@ -1816,38 +1729,41 @@ namespace cauldron
     // Handles all end of frame logic (like present)
     void Framework::EndFrame()
     {
-        CPUScopedProfileCapture marker(L"EndFrame");
-
-        // Transition swapchain from expected state for render module usage to present
-        Barrier presentBarrier = Barrier::Transition(m_pSwapChain->GetBackBufferRT()->GetCurrentResource(),
-                                                        ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource,
-                                                        ResourceState::Present);
-        ResourceBarrier(m_pCmdListForFrame, 1, &presentBarrier);
-
         {
-            // Asynchronously delete the active command list in the background once it's cleared the graphics queue
-            uint64_t                      signalValue     = m_pDevice->ExecuteCommandLists(m_vecCmdListsForFrame, CommandQueue::Graphics, false);
-            cauldron::GPUExecutionPacket* pInflightPacket = new GPUExecutionPacket(m_vecCmdListsForFrame, signalValue);
-            GetTaskManager()->AddTask(Task(std::bind(&Framework::DeleteCommandListAsync, this, std::placeholders::_1), reinterpret_cast<void*>(pInflightPacket)));
+            CPUScopedProfileCapture marker(L"EndFrame");
+
+            // Transition swapchain from expected state for render module usage to present
+            Barrier presentBarrier = Barrier::Transition(m_pSwapChain->GetBackBufferRT()->GetCurrentResource(),
+                                                         ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource,
+                                                         ResourceState::Present);
+            ResourceBarrier(m_pCmdListForFrame, 1, &presentBarrier);
+
+            {
+                // Asynchronously delete the active command list in the background once it's cleared the graphics queue
+                uint64_t                      signalValue     = m_pDevice->ExecuteCommandLists(m_vecCmdListsForFrame, CommandQueue::Graphics, false);
+                cauldron::GPUExecutionPacket* pInflightPacket = new GPUExecutionPacket(m_vecCmdListsForFrame, signalValue);
+                GetTaskManager()->AddTask(
+                    Task(std::bind(&Framework::DeleteCommandListAsync, this, std::placeholders::_1), reinterpret_cast<void*>(pInflightPacket)));
+            }
+
+            // End the frame of the profiler
+            m_pProfiler->EndFrame(m_pCmdListForFrame);
+
+            // Can't be referenced until next time BeginFrame is called
+            m_pDeviceCmdListForFrame = nullptr;
+            m_pCmdListForFrame       = nullptr;
+            m_vecCmdListsForFrame.clear();
+
+            // Closes all command lists
+            m_pDevice->EndFrame();
+
+            // Present
+            m_pSwapChain->Present();
+
+            // If we are doing GPU Validation, flush every frame
+            if (m_Config.GPUValidationEnabled)
+                m_pDevice->FlushAllCommandQueues();
         }
-
-        // End the frame of the profiler
-        m_pProfiler->EndFrame(m_pCmdListForFrame);
-
-        // Can't be referenced until next time BeginFrame is called
-        m_pDeviceCmdListForFrame = nullptr;
-        m_pCmdListForFrame = nullptr;
-        m_vecCmdListsForFrame.clear();
-
-        // Closes all command lists
-        m_pDevice->EndFrame();
-
-        // Present
-        m_pSwapChain->Present();
-
-        // If we are doing GPU Validation, flush every frame
-        if (m_Config.GPUValidationEnabled)
-            m_pDevice->FlushAllCommandQueues();
 
         // Reset the RenderDoc capture
         if(m_RenderDocApi && (m_RenderDocCaptureState == FrameCaptureState::CaptureStarted))
@@ -1887,18 +1803,112 @@ namespace cauldron
             }
         }
 
-         // if we are taking a screenshot for video, it will be taken on the next MainLoop call
-        int extraFrames = m_Config.TakeScreenshotForVideo || m_Config.TakeScreenshot ? 1 : 0;
-
         // Stop running if the perf dump timer ran out
         // If no timer is set, the stop time is UINT32_MAX, which should be high enough to not occur with normal operation
         // (it would take 50 days at 1000 FPS)
-        if (m_PerfFrameCount - m_BenchmarkLeadFrameCount == m_Config.BenchmarkFrameDuration + extraFrames)
+        if (m_BufferIndex - m_BenchmarkLeadFrameCount == m_Config.BenchmarkFrameDuration)
         {
             m_StopTime = std::chrono::steady_clock::now();
 
             // imitate user closing the window for graceful shutdown
             PostQuitMessage(0);
+            return;
+        }
+
+        // Save the rendered frame
+        {
+            CPUScopedProfileCapture marker(L"SaveFrame");
+            if (m_BufferIndex > 0)
+            {
+                // Backbuffer is filled, we rendered and filled the first buffer as well. Start counting down the lead frames
+                m_BenchmarkLeadFrames--;
+                if (m_Config.TakeScreenshotForVideo && m_BenchmarkLeadFrames <= 0)
+                {
+                    // Reset the upscalers' temporal information
+                    SetResetFlag(m_BenchmarkLeadFrames == 0);
+
+                    // Get process PID
+                    const std::wstring pid = std::to_wstring(GetCurrentProcessId());
+
+                    // If we are bencharmking, use the benchmarking path
+                    filesystem::path outputPath;
+                    if (m_Config.EnableBenchmark)
+                    {
+                        outputPath = m_Config.BenchmarkPath + L"\\" + pid + L"\\";
+                    }
+                    else
+                    {
+                        outputPath = L"screenshots\\" + pid + L"\\";
+                    }
+
+                    // Defensive, in case path doesn't exist
+                    if (!outputPath.empty())
+                        filesystem::create_directories(outputPath);
+
+                    // Pad the frame number to 5 digits
+                    std::wstringstream frameID_str;
+                    frameID_str << std::setw(5) << std::setfill(L'0') << m_BufferIndex - m_BenchmarkLeadFrameCount + 1;  // 1-based index
+
+                    if (m_Config.EnableBenchmark)
+                        m_Config.ScreenShotFileName = outputPath;
+
+                    // Add the file extension and path
+                    outputPath /= frameID_str.str() + L".jpg";
+
+                    // Dump it out
+                    m_pSwapChain->DumpSwapChainToFile(outputPath);
+                }
+                // If we are benchmarking and need to take a screen shot, dump the last frame out to file
+                else if (m_Config.TakeScreenshot && m_BufferIndex == m_Config.BenchmarkFrameDuration)
+                {
+                    // If we are bencharmking, use the benchmarking path
+                    filesystem::path outputPath;
+                    if (m_Config.EnableBenchmark)
+                    {
+                        outputPath = m_Config.BenchmarkPath;
+                    }
+                    else
+                    {
+                        outputPath = L"screenshots\\";
+                    }
+
+                    // Defensive, in case path doesn't exist
+                    if (!outputPath.empty())
+                        filesystem::create_directory(outputPath);
+
+                    // Get process PID
+                    const std::wstring pid = std::to_wstring(GetCurrentProcessId());
+
+                    // Make a file name that is unique (sample name exe + permutations of interest + time stamp to seconds)
+                    std::wstringstream fileName;
+                    fileName << m_Name << '_' << pid;
+
+                    // Add resolution
+                    const ResolutionInfo& resInfo = GetFramework()->GetResolutionInfo();
+                    fileName << '_' << resInfo.RenderWidth << 'x' << resInfo.RenderHeight;
+                    fileName << '_' << resInfo.DisplayWidth << 'x' << resInfo.DisplayHeight;
+
+                    // Add permutations to file name for further identification
+                    for (auto& permutation : m_Config.BenchmarkPermutationOptions)
+                    {
+                        fileName << '_' << permutation.second;
+                    }
+
+#pragma warning(push)
+#pragma warning(disable:4996)  // Avoid deprecation warning on std::localtime
+                    auto now       = std::chrono::system_clock::now();
+                    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+                    fileName << '_' << std::put_time(std::localtime(&in_time_t), L"%Y-%m-%d-%H-%M-%S") << L".jpg";
+                    outputPath.append(fileName.str());
+#pragma warning(pop)
+
+                    if (m_Config.EnableBenchmark)
+                        m_Config.ScreenShotFileName = outputPath;
+
+                    // Dump it out
+                    m_pSwapChain->DumpSwapChainToFile(outputPath);
+                }
+            }
         }
     }
 

@@ -43,6 +43,16 @@ public:
         return pFence->GetCompletedValue() == static_cast<UINT64>(state);
     }
 
+    bool bufferStateMatchesAll(BufferState state)
+    {
+        for (size_t i = 0; i < GetFramework()->GetBufferCount(); i++)
+        {
+            if (!bufferStateMatches(i, state))
+                return false;
+        }
+        return true;
+    }
+
     void CreateSharedBuffers(FSRResources pResources, bool shouldCreate = false);
 
     void TransferToSharedBuffer(FSRResources pResources, uint64_t bufferIndex, CommandList* pCmdList)

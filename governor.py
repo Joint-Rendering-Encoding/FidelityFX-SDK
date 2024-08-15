@@ -92,18 +92,10 @@ def get_config(mode, opts):
         "UseGPULimiter"
     ] = False  # Messes with GPU metrics
 
-    if mode == "Renderer":
+    if mode in ("Default", "Renderer"):
         tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = opts.fps
     else:
-        # If using frame generation, double the target FPS
-        is_fg = opts.upscaler in FRAME_GENERATION
-        if is_fg:
-            assert (
-                opts.fps <= 30
-            ), "Frame generation requires an render FPS of 30 or less"
-        tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = (
-            opts.fps * 2 if is_fg else opts.fps
-        )
+        tmp["FidelityFX FSR"]["FPSLimiter"]["Enable"] = False
 
     # Set the scene exposure
     tmp["FidelityFX FSR"]["Content"]["SceneExposure"] = opts.scene_exposure

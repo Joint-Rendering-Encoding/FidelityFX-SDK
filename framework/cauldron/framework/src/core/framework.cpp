@@ -1539,6 +1539,19 @@ namespace cauldron
         EndFrame();
     }
 
+    void Framework::FPSLimiterOnly()
+    {
+        for (auto& callback : m_ExecutionCallbacks)
+        {
+            if (callback.second.first->ModuleEnabled() && callback.second.first->ModuleReady() && callback.first == L"FPSLimiterRenderModule")
+            {
+                // This assumes that we are not using the "GPU Limiter" as the FPS limiter
+                callback.second.second(0.0f, nullptr);
+                break;
+            }
+        }
+    }
+
     // Handles start of frame logic (like frame count update and delta time calculations)
     void Framework::BeginFrame()
     {

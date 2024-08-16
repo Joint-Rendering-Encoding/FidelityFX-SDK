@@ -88,14 +88,10 @@ def get_config(mode, opts):
 
     # Apply FPS settings
     tmp["FidelityFX FSR"]["FPSLimiter"]["UseReflex"] = False  # Not operational
+    tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = opts.fps
     tmp["FidelityFX FSR"]["FPSLimiter"][
         "UseGPULimiter"
     ] = False  # Messes with GPU metrics
-
-    if mode in ("Default", "Renderer"):
-        tmp["FidelityFX FSR"]["FPSLimiter"]["TargetFPS"] = opts.fps
-    else:
-        tmp["FidelityFX FSR"]["FPSLimiter"]["Enable"] = False
 
     # Set the scene exposure
     tmp["FidelityFX FSR"]["Content"]["SceneExposure"] = opts.scene_exposure

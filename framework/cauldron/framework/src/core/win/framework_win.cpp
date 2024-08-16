@@ -355,6 +355,8 @@ namespace cauldron
                     // Check if we can execute
                     if (m_pFramework->CanExecuteMainLoop())
                         m_pFramework->MainLoop();
+                    else
+                        m_pFramework->FPSLimiterOnly();
                 }
             }
         }

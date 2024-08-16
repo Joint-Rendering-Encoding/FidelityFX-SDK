@@ -30,7 +30,7 @@
 #include <synchapi.h>
 
 using namespace cauldron;
-#define USE_BUSY_WAIT   1
+#define USE_BUSY_WAIT   0
 
 // Used in a few places
 static uint32_t       sSeed;
@@ -161,6 +161,7 @@ void FPSLimiterRenderModule::Execute(double deltaTime, cauldron::CommandList* pC
     else
     {
         GPUScopedProfileCapture marker(pCmdList, L"FPSLimiter");
+        CauldronAssert(ASSERT_CRITICAL, pCmdList != nullptr, L"CommandList is null");
 
         uint64_t lastFrameTimeUs = 0;
         auto&    timings         = GetProfiler()->GetGPUTimings();

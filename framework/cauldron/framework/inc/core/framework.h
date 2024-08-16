@@ -372,6 +372,11 @@ namespace cauldron
         void MainLoop();
 
         /**
+         * @brief   Executes only the FPS limiter 
+         */
+        void FPSLimiterOnly();
+
+        /**
          * @brief   Internal implementation accessor.
          */
         const FrameworkInternal* GetInternal() const { return m_pImpl; }

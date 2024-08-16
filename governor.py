@@ -260,10 +260,10 @@ def parse_args():
         help="Use the default config, without decoupling the upscaler",
     )
     parser.add_argument(
-        "--screenshot-for-video",
-        action="store_true",
-        default=False,
-        help="Enable screenshot for video mode",
+        "--screenshot",
+        type=str,
+        choices=["image", "video"],
+        help="Take a screenshot or video",
     )
     parser.add_argument(
         "--use-release-build",
@@ -336,10 +336,16 @@ def close_by_pid(pid):
     return False
 
 
-def get_process_args(mode, video=False, duration=0, has_fg=False):
-    screenshot = "-screenshot-for-video" if video else "-screenshot"
+def get_process_args(mode, screenshot_mode=None, duration=0, has_fg=False):
+    if screenshot_mode == "video":
+        screenshot = "-screenshot-for-video"
+    elif screenshot_mode == "image":
+        screenshot = "-screenshot"
+    else:
+        screenshot = ""
+
     process_args = [
-        screenshot if mode != "Renderer" else "",
+        screenshot if mode != "Renderer" else "", # Always ignore screenshot for renderer
         "-displaymode",
         "DISPLAYMODE_LDR",
         "-benchmark",
@@ -387,7 +393,7 @@ def main(opts):
             os.path.join(FSR_DIR, exe_name),
             *get_process_args(
                 mode,
-                video=opts.screenshot_for_video,
+                screenshot_mode=opts.screenshot,
                 duration=opts.benchmark * opts.fps,
                 has_fg=opts.upscaler in FRAME_GENERATION,
             ),
@@ -432,7 +438,7 @@ def main(opts):
                 os.path.join(FSR_DIR, exe_name),
                 *get_process_args(
                     "Upscaler",
-                    video=opts.screenshot_for_video,
+                    screenshot_mode=opts.screenshot,
                     duration=opts.benchmark * opts.fps,
                     has_fg=opts.upscaler in FRAME_GENERATION,
                 ),
@@ -556,7 +562,7 @@ def main(opts):
         if (
             opts.benchmark > 0
             and time.time() - start_time > opts.benchmark + 15
-            and not opts.screenshot_for_video
+            and opts.screenshot != "video"
         ):
             cleanup(None, None, non_zero=True)
             break
@@ -595,7 +601,7 @@ if __name__ == "__main__":
 
     if args.compare:
         assert (
-            not args.screenshot_for_video
+            args.screenshot != "video"
         ), "Cannot use screenshot for video in comparison mode"
 
     # Run with the requested arguments

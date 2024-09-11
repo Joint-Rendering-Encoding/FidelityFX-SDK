@@ -173,6 +173,136 @@ namespace cauldron
         }
     }
 
+    void SwapChainInternal::CopySwapChainToReadback(CommandList* pCmdList)
+    {
+        D3D12_RESOURCE_DESC fromDesc     = m_pRenderTarget->GetCurrentResource()->GetImpl()->DX12Desc();
+        size_t              resourceSize = fromDesc.Width * fromDesc.Height * GetResourceFormatStride(m_pRenderTarget->GetFormat());
+
+        // Resize the vectors if needed
+        if (m_pSwapChainReadbackTargets.size() != m_SwapChainDesc.BufferCount)
+        {
+            m_pSwapChainReadbackTargets.resize(m_SwapChainDesc.BufferCount);
+            m_pSwapChainReadbackFences.resize(m_SwapChainDesc.BufferCount);
+        }
+
+        // Get the readback resource and fence for the current back buffer
+        ID3D12Resource** pResourceReadback = &m_pSwapChainReadbackTargets[m_CurrentBackBuffer];
+        ID3D12Fence**    pFenceReadback    = &m_pSwapChainReadbackFences[m_CurrentBackBuffer];
+
+        // Create a readback buffer if it doesn't exist or if the size has changed
+        if (*pResourceReadback == nullptr || (*pResourceReadback)->GetDesc().Width != resourceSize)
+        {
+            if (*pResourceReadback)
+            {
+                (*pResourceReadback)->Release();
+                *pResourceReadback = nullptr;
+            }
+
+            CD3DX12_HEAP_PROPERTIES readBackHeapProperties(D3D12_HEAP_TYPE_READBACK);
+
+            D3D12_RESOURCE_DESC bufferDesc = {};
+            bufferDesc.Alignment           = 0;
+            bufferDesc.DepthOrArraySize    = 1;
+            bufferDesc.Dimension           = D3D12_RESOURCE_DIMENSION_BUFFER;
+            bufferDesc.Flags               = D3D12_RESOURCE_FLAG_NONE;
+            bufferDesc.Format              = DXGI_FORMAT_UNKNOWN;
+            bufferDesc.Height              = 1;
+            bufferDesc.Width               = resourceSize;
+            bufferDesc.Layout              = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            bufferDesc.MipLevels           = 1;
+            bufferDesc.SampleDesc.Count    = 1;
+            bufferDesc.SampleDesc.Quality  = 0;
+
+            CauldronThrowOnFail(GetDevice()->GetImpl()->DX12Device()->CreateCommittedResource(
+                &readBackHeapProperties, D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(pResourceReadback)));
+
+            // Create a fence for the readback buffer
+            if (*pFenceReadback == nullptr)
+                CauldronThrowOnFail(GetDevice()->GetImpl()->DX12Device()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(pFenceReadback)));
+        }
+
+        // Wait for the fence to be signaled
+        if ((*pFenceReadback)->GetCompletedValue() != 0)
+        {
+            HANDLE mHandleFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+            CauldronThrowOnFail((*pFenceReadback)->SetEventOnCompletion(0, mHandleFenceEvent));
+            WaitForSingleObject(mHandleFenceEvent, INFINITE);
+            CloseHandle(mHandleFenceEvent);
+        }
+
+        // Transition the swap chain buffer to a copy source
+        Barrier barrier = Barrier::Transition(
+            m_pRenderTarget->GetCurrentResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopySource);
+        ResourceBarrier(pCmdList, 1, &barrier);
+
+        // Copy the swap chain buffer to the readback buffer
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout[1]             = {0};
+        uint32_t                           num_rows[1]           = {0};
+        UINT64                             row_sizes_in_bytes[1] = {0};
+        UINT64                             uploadHeapSize        = 0;
+        GetDevice()->GetImpl()->DX12Device()->GetCopyableFootprints(&fromDesc, 0, 1, 0, layout, num_rows, row_sizes_in_bytes, &uploadHeapSize);
+
+        CD3DX12_TEXTURE_COPY_LOCATION copyDest(*pResourceReadback, layout[0]);
+        CD3DX12_TEXTURE_COPY_LOCATION copySrc(m_pRenderTarget->GetCurrentResource()->GetImpl()->DX12Resource(), 0);
+        pCmdList->GetImpl()->DX12CmdList()->CopyTextureRegion(&copyDest, 0, 0, 0, &copySrc, nullptr);
+
+        // Reset the state of the resource
+        barrier = Barrier::Transition(
+            m_pRenderTarget->GetCurrentResource(), ResourceState::CopySource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource);
+        ResourceBarrier(pCmdList, 1, &barrier);
+
+        // Signal the fence
+        CauldronThrowOnFail(GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->Signal(*pFenceReadback, 1));
+    }
+
+    void SwapChainInternal::CopyReadbackToMemory(uint8_t** ppData, uint8_t at)
+    {
+        // Get the readback resource and fence for the current back buffer
+        ID3D12Resource** pResourceReadback = &m_pSwapChainReadbackTargets[at];
+        ID3D12Fence**    pFenceReadback    = &m_pSwapChainReadbackFences[at];
+
+        // Wait for the fence to be signaled
+        if ((*pFenceReadback)->GetCompletedValue() != 1)
+        {
+            HANDLE mHandleFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+            CauldronThrowOnFail((*pFenceReadback)->SetEventOnCompletion(1, mHandleFenceEvent));
+            WaitForSingleObject(mHandleFenceEvent, INFINITE);
+            CloseHandle(mHandleFenceEvent);
+        }
+
+        // Get the size of the frame
+        D3D12_RESOURCE_DESC fromDesc     = (*pResourceReadback)->GetDesc();
+        size_t              resourceSize = fromDesc.Width;
+
+        // Map the resource
+        UINT64*     pFrameData = nullptr;
+        D3D12_RANGE range;
+        range.Begin = 0;
+        range.End   = resourceSize;
+        CauldronThrowOnFail((*pResourceReadback)->Map(0, &range, reinterpret_cast<void**>(&pFrameData)));
+
+        // Resize the memory region to the size of the frame
+        *ppData = (uint8_t*)malloc(resourceSize);
+        if (*ppData == nullptr)
+            goto fail;
+
+        // Copy and unmap the resource
+        memcpy(*ppData, pFrameData, resourceSize);
+        (*pResourceReadback)->Unmap(0, NULL);
+
+        // Signal the fence
+        CauldronThrowOnFail(GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->Signal(*pFenceReadback, 0));
+        return;
+
+    fail:
+        free(*ppData);
+        *ppData = nullptr;
+        (*pResourceReadback)->Unmap(0, NULL);
+        (*pResourceReadback)->Release();
+        *pResourceReadback = nullptr;
+        CauldronCritical(L"Failed to allocate memory for dumping swapchain to memory");
+    }
+
     void SwapChainInternal::DumpSwapChainToFile(filesystem::path filePath)
     {
         D3D12_RESOURCE_DESC fromDesc = m_pRenderTarget->GetCurrentResource()->GetImpl()->DX12Desc();

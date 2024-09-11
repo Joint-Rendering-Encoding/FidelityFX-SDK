@@ -399,6 +399,13 @@ namespace cauldron
         // Initialize time last right before running so we don't hit a spike on the first frame
         m_LastFrameTime = std::chrono::system_clock::now();
 
+        // Initialize the Streamer if we are streaming
+        if (m_Config.Streaming)
+        {
+            m_pStreamer = new Streamer();
+            m_pStreamer->Init();
+        }
+
         return 0;
     }
 
@@ -625,6 +632,13 @@ namespace cauldron
 
         // terminate the scene
         m_pScene->TerminateScene();
+
+        // Shutdown the encoder
+        if (m_Config.Streaming)
+        {
+            m_pStreamer->Shutdown();
+            delete m_pStreamer;
+        }
 
         // Unregister all component managers
         UnRegisterComponentsAndRenderModules();
@@ -992,6 +1006,16 @@ namespace cauldron
             m_Config.EnableBenchmark = benchmarkConfig.value("Enabled", m_Config.EnableBenchmark);
             m_Config.BenchmarkFrameDuration = benchmarkConfig.value("FrameDuration", m_Config.BenchmarkFrameDuration);
             m_Config.BenchmarkPath = benchmarkConfig.value("Path", m_Config.BenchmarkPath);
+        }
+
+        // Initialize Stream config
+        if (configData.find("Stream") != configData.end())
+        {
+            json streamConfig = configData["Stream"];
+            m_Config.Streaming = streamConfig.value("Enabled", m_Config.Streaming);
+            m_Config.StreamingInfo.Host = StringToWString(streamConfig.value("Host", WStringToString(m_Config.StreamingInfo.Host)));
+            m_Config.StreamingInfo.Port = streamConfig.value("Port", m_Config.StreamingInfo.Port);
+            m_Config.StreamingInfo.Name = StringToWString(streamConfig.value("Name", WStringToString(m_Config.StreamingInfo.Name)));
         }
 
         // Validate that the information are correct
@@ -1526,6 +1550,17 @@ namespace cauldron
                         m_vecCmdListsForFrame.push_back(m_pCmdListForFrame);
                     }
                 }
+
+                // Execute streamer callback if we are streaming
+                if (m_Config.Streaming)
+                {
+                    m_pCmdListForFrame = m_pDevice->CreateCommandList(L"StreamerCmdList", CommandQueue::Graphics);
+                    SetAllResourceViewHeaps(m_pCmdListForFrame);
+
+                    m_pStreamer->ExecuteCopyCommand(m_pCmdListForFrame);
+                    CloseCmdList(m_pCmdListForFrame);
+                    m_vecCmdListsForFrame.push_back(m_pCmdListForFrame);
+                }
             }
 
             // Update the buffer index
@@ -1728,9 +1763,14 @@ namespace cauldron
     void Framework::DeleteCommandListAsync(void* pInFlightGPUInfo)
     {
         GPUExecutionPacket* pInflightPacket = static_cast<GPUExecutionPacket*>(pInFlightGPUInfo);
+        uint8_t currentBackBufferIndex = m_pSwapChain->GetBackBufferIndex();
 
         // Wait until the command lists are processed
         m_pDevice->WaitOnQueue(pInflightPacket->CompletionID, CommandQueue::Graphics);
+
+        // Encode the frame
+        if (m_Config.Streaming)
+            m_pStreamer->Encode(currentBackBufferIndex);
 
         // Delete them to release the allocators
         for (auto cmdListIter = pInflightPacket->CmdLists.begin(); cmdListIter != pInflightPacket->CmdLists.end(); ++cmdListIter)
@@ -1830,7 +1870,6 @@ namespace cauldron
 
         // Save the rendered frame
         {
-            CPUScopedProfileCapture marker(L"SaveFrame");
             if (m_BufferIndex > 0)
             {
                 // Backbuffer is filled, we rendered and filled the first buffer as well. Start counting down the lead frames

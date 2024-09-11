@@ -53,6 +53,7 @@
 #include "render/rendermodule.h"
 #include "shaders/shadercommon.h"
 #include "core/taskmanager.h"
+#include "core/streamer.h"
 #include "core/components/cameracomponent.h"
 
 // No way to forward declare this that I can tell
@@ -155,6 +156,9 @@ namespace cauldron
         bool LimitFPS : 1;
         bool GPULimitFPS : 1;
 
+        // Streaming
+        bool Streaming : 1;
+
         // Acceleration Structure
         bool BuildRayTracingAccelerationStructure : 1;
 
@@ -162,6 +166,14 @@ namespace cauldron
         // Non-binary data
 
         std::string MotionVectorGeneration = "";
+
+        // Streaming
+        struct StreamingInfo
+        {
+            std::wstring Host = L"localhost";
+            uint32_t     Port = 4443;
+            std::wstring Name = L"live";
+        } StreamingInfo;
 
         // FPS limiter
         uint32_t LimitedFrameRate = 240;
@@ -300,6 +312,7 @@ namespace cauldron
     class ComponentMgr;
     class ContentManager;
     class Device;
+    class Streamer;
     class DynamicBufferPool;
     class DynamicResourcePool;
     class FrameworkInternal;
@@ -826,6 +839,7 @@ namespace cauldron
 
         // Graphics sub-systems
         Device*                 m_pDevice                = nullptr;
+        Streamer*               m_pStreamer              = nullptr;
         ResourceViewAllocator*  m_pResourceViewAllocator = nullptr;
         RasterViewAllocator*    m_pRasterViewAllocator   = nullptr;
         SwapChain*              m_pSwapChain             = nullptr;

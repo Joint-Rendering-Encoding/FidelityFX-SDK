@@ -62,3 +62,42 @@ python governor.py --render-res 1285 835 --upscaler FSR3 --use-default
 # Example usage if you want to launch the upscaler from Visual Studio
 python governor.py --render-res 1285 835 --upscaler FSR3 --skip-upscaler # This will skip launching the upscaler
 ```
+
+## Streaming
+
+Streaming of the upscaled content is done using [Media-over-QUIC](https://datatracker.ietf.org/group/moq/about/). The sample and the governor script can be configured to stream the upscaled content locally. This is done by setting the `--stream` flag in the governor script.
+
+### Prerequisites
+
+The version numbers are the ones used during the development of the sample. It is possible to use newer versions of the software.
+
+-   [Rust](https://www.rust-lang.org/tools/install) (1.81.0)
+-   [Go](https://go.dev/dl/) (1.23.1)
+-   [Clang](https://chocolatey.org/packages/llvm) (18.1.8)
+-   [FFmpeg](https://ffmpeg.org/download.html) (7.0.2)
+
+### Setup
+
+Run the convenience script to setup the MOQ server:
+
+```bash
+.\SetupMOQ.bat
+```
+
+### Running the sample
+
+The sample's configuration must be set to stream the content. Please refer to the [governor](./governor.py) script for more information. To run the sample with streaming enabled, use the following command:
+
+```bash
+python governor.py --render-res 1285 835 --upscaler FSR3 --stream
+```
+
+> There's no restriction on which parameters can be used with the `--stream` flag.
+
+### Viewing the stream
+
+This part is left to the user. [moq-rs](https://github.com/kixelated/moq-rs) repository offers [moq-js](https://github.com/kixelated/moq-js) to setup a simple web server to view the stream. It is also possible to view the stream over [quic.video](https://quic.video/).
+
+Easiest way is to go to https://quic.video/watch/live?server=localhost:4443 and view the stream.
+
+> Warning: If you encounter TLS errors, please make sure to run the `SetupMOQ.bat` script again.

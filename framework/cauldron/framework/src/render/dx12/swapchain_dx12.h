@@ -62,6 +62,9 @@ namespace cauldron
         void OnResize(uint32_t width, uint32_t height) override;
         void WaitForSwapChain() override;
         void Present() override;
+        
+        void CopySwapChainToReadback(CommandList* pCmdList) override;
+        void CopyReadbackToMemory(uint8_t** ppData, uint8_t at) override;
 
         void DumpSwapChainToFile(std::experimental::filesystem::path filePath) override;
 
@@ -88,6 +91,10 @@ namespace cauldron
         friend class DeviceInternal;
         Microsoft::WRL::ComPtr<IDXGISwapChain4> m_pSwapChain = nullptr;
         DXGI_SWAP_CHAIN_DESC1                   m_SwapChainDesc = {};
+
+        // Internal resource ring buffer
+        std::vector<ID3D12Resource*> m_pSwapChainReadbackTargets;
+        std::vector<ID3D12Fence*>    m_pSwapChainReadbackFences;
 
         std::vector<Microsoft::WRL::ComPtr<IDXGIOutput6>>       m_pAttachedOutputs;
         Microsoft::WRL::ComPtr<IDXGIOutput6>                    m_pCurrentOutput;

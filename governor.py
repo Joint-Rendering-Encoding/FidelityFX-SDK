@@ -176,6 +176,17 @@ def get_config(mode, opts):
             "DLSSUpscaleRenderModule"
         ]["mode"] = (DLSS_MODES.index(opts.dlssMode) + 1)
 
+    # Apply streaming settings
+    if opts.stream and mode in ("Default", "Upscaler"):
+        tmp["FidelityFX FSR"]["Stream"] = {
+            "Enabled": True,
+            "Host": "https://localhost",
+            "Port": 4443,
+            "Name": "live",
+        }
+    else:
+        del tmp["FidelityFX FSR"]["Stream"]
+
     return tmp
 
 
@@ -266,6 +277,12 @@ def parse_args():
         help="Take a screenshot or video",
     )
     parser.add_argument(
+        "--stream",
+        action="store_true",
+        default=False,
+        help="Stream the upscaled content over Media-over-QUIC. Launches moq-relay.exe and configures the upscaler to stream the content",
+    )
+    parser.add_argument(
         "--use-release-build",
         action="store_true",
         default=False,
@@ -345,7 +362,9 @@ def get_process_args(mode, screenshot_mode=None, duration=0, has_fg=False):
         screenshot = ""
 
     process_args = [
-        screenshot if mode != "Renderer" else "", # Always ignore screenshot for renderer
+        (
+            screenshot if mode != "Renderer" else ""
+        ),  # Always ignore screenshot for renderer
         "-displaymode",
         "DISPLAYMODE_LDR",
         "-benchmark",
@@ -371,6 +390,32 @@ def main(opts):
         if opts.use_release_build
         else "FFX_FSR_NATIVE_DX12D.exe"
     )
+
+    # If streaming is enabled, launch the moq-relay process
+    if opts.stream:
+        relay = subprocess.Popen(
+            [
+                os.path.join(FSR_DIR, "moq-relay.exe"),
+                "--bind",
+                "[::]:4443",
+                "--tls-cert",
+                "cert/localhost.crt",
+                "--tls-key",
+                "cert/localhost.key",
+                "--dev",
+            ],
+            cwd=FSR_DIR,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+        if relay.poll() is not None:
+            raise ValueError("Failed to start the relay process")
+        if opts.structured_logs:
+            print("RELAY_PID", relay.pid)
+            sys.stdout.flush()
+        else:
+            print(f"Relay PID: {relay.pid}")
 
     # For Native rendering, match the render resolution to the present resolution
     if opts.upscaler == "Native":
@@ -489,6 +534,10 @@ def main(opts):
 
         if not opts.skip_upscaler and upscaler.poll() is None:
             upscaler.kill()
+
+        # Close the relay process
+        if opts.stream:
+            relay.kill()
 
         # Exit with the appropriate code
         if non_zero:

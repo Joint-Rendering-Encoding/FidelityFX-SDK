@@ -25,6 +25,7 @@
 #include "misc/helpers.h"
 #include "render/resourceview.h"
 #include "shaders/shadercommon.h"
+#include "render/commandlist.h"
 
 namespace cauldron
 {
@@ -123,6 +124,16 @@ namespace cauldron
         {
             *outRefreshRate = 0.0;
         }
+
+        /**
+         * @brief   Copies the swap chain to the readback buffer.
+         */
+        virtual void CopySwapChainToReadback(CommandList* pCmdList) = 0;
+        
+        /**
+         * @brief   Copies the readback buffer to memory.
+         */
+        virtual void CopyReadbackToMemory(uint8_t** ppData, uint8_t at) = 0;
 
         /**
          * @brief   Creates a screenshot of the current swap chain.

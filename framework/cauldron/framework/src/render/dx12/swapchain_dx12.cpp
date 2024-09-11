@@ -124,6 +124,17 @@ namespace cauldron
 
     SwapChainInternal::~SwapChainInternal()
     {
+        for (auto readback : m_pSwapChainReadbackTargets)
+        {
+            if (readback)
+                readback->Release();
+        }
+
+        for (auto fence : m_pSwapChainReadbackFences)
+        {
+            if (fence)
+                fence->Release();
+        }
     }
 
     void SwapChainInternal::OnResize(uint32_t width, uint32_t height)

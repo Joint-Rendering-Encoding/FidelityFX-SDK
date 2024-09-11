@@ -624,6 +624,13 @@ namespace cauldron
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
+        // Shutdown the encoder
+        if (m_Config.Streaming)
+        {
+            m_pStreamer->Shutdown();
+            delete m_pStreamer;
+        }
+
         // Terminate the task manager
         m_pTaskManager->Shutdown();
 
@@ -632,13 +639,6 @@ namespace cauldron
 
         // terminate the scene
         m_pScene->TerminateScene();
-
-        // Shutdown the encoder
-        if (m_Config.Streaming)
-        {
-            m_pStreamer->Shutdown();
-            delete m_pStreamer;
-        }
 
         // Unregister all component managers
         UnRegisterComponentsAndRenderModules();
@@ -1685,6 +1685,9 @@ namespace cauldron
 
         // Need to exclude begin CPUFrame from our timings due to switch over (maybe should move CPU timing collection to end of frame?)
         CPUScopedProfileCapture marker(L"Begin Frame");
+        
+        if (m_Config.Streaming)
+            m_pStreamer->ReportTiming(StreamTimingType::BeginFrame, m_PerfFrameCount);
 
         // Make sure the swapchain is ready for this frame
         m_pSwapChain->WaitForSwapChain();
@@ -1753,11 +1756,13 @@ namespace cauldron
         std::vector<CommandList*> CmdLists     = {};
         uint64_t                  CompletionID = 0;
         uint8_t                   CurrentBackBufferIndex = 0;
+        int64_t                   FrameID = 0;
 
-        GPUExecutionPacket(std::vector<CommandList*>& cmdLists, uint64_t completionID, uint8_t currentBackBufferIndex)
+        GPUExecutionPacket(std::vector<CommandList*>& cmdLists, uint64_t completionID, uint8_t currentBackBufferIndex, int64_t frameID)
             : CmdLists(std::move(cmdLists))
             , CompletionID(completionID)
             , CurrentBackBufferIndex(currentBackBufferIndex)
+            , FrameID(frameID)
         {
         }
         GPUExecutionPacket() = delete;
@@ -1771,7 +1776,7 @@ namespace cauldron
 
         // Encode the frame
         if (m_Config.Streaming)
-            m_pStreamer->Encode(pInflightPacket->CurrentBackBufferIndex);
+            m_pStreamer->Encode(pInflightPacket->CurrentBackBufferIndex, pInflightPacket->FrameID);
 
         // Delete them to release the allocators
         for (auto cmdListIter = pInflightPacket->CmdLists.begin(); cmdListIter != pInflightPacket->CmdLists.end(); ++cmdListIter)
@@ -1795,7 +1800,7 @@ namespace cauldron
             {
                 // Asynchronously delete the active command list in the background once it's cleared the graphics queue
                 uint64_t                      signalValue     = m_pDevice->ExecuteCommandLists(m_vecCmdListsForFrame, CommandQueue::Graphics, false);
-                cauldron::GPUExecutionPacket* pInflightPacket = new GPUExecutionPacket(m_vecCmdListsForFrame, signalValue, m_pSwapChain->GetBackBufferIndex());
+                cauldron::GPUExecutionPacket* pInflightPacket = new GPUExecutionPacket(m_vecCmdListsForFrame, signalValue, m_pSwapChain->GetBackBufferIndex(), m_PerfFrameCount);
                 GetTaskManager()->AddTask(Task(std::bind(&Framework::DeleteCommandListAsync, this, std::placeholders::_1), reinterpret_cast<void*>(pInflightPacket)));
             }
 

@@ -1752,10 +1752,12 @@ namespace cauldron
     {
         std::vector<CommandList*> CmdLists     = {};
         uint64_t                  CompletionID = 0;
+        uint8_t                   CurrentBackBufferIndex = 0;
 
-        GPUExecutionPacket(std::vector<CommandList*>& cmdLists, uint64_t completionID)
+        GPUExecutionPacket(std::vector<CommandList*>& cmdLists, uint64_t completionID, uint8_t currentBackBufferIndex)
             : CmdLists(std::move(cmdLists))
             , CompletionID(completionID)
+            , CurrentBackBufferIndex(currentBackBufferIndex)
         {
         }
         GPUExecutionPacket() = delete;
@@ -1763,14 +1765,13 @@ namespace cauldron
     void Framework::DeleteCommandListAsync(void* pInFlightGPUInfo)
     {
         GPUExecutionPacket* pInflightPacket = static_cast<GPUExecutionPacket*>(pInFlightGPUInfo);
-        uint8_t currentBackBufferIndex = m_pSwapChain->GetBackBufferIndex();
 
         // Wait until the command lists are processed
         m_pDevice->WaitOnQueue(pInflightPacket->CompletionID, CommandQueue::Graphics);
 
         // Encode the frame
         if (m_Config.Streaming)
-            m_pStreamer->Encode(currentBackBufferIndex);
+            m_pStreamer->Encode(pInflightPacket->CurrentBackBufferIndex);
 
         // Delete them to release the allocators
         for (auto cmdListIter = pInflightPacket->CmdLists.begin(); cmdListIter != pInflightPacket->CmdLists.end(); ++cmdListIter)
@@ -1794,9 +1795,8 @@ namespace cauldron
             {
                 // Asynchronously delete the active command list in the background once it's cleared the graphics queue
                 uint64_t                      signalValue     = m_pDevice->ExecuteCommandLists(m_vecCmdListsForFrame, CommandQueue::Graphics, false);
-                cauldron::GPUExecutionPacket* pInflightPacket = new GPUExecutionPacket(m_vecCmdListsForFrame, signalValue);
-                GetTaskManager()->AddTask(
-                    Task(std::bind(&Framework::DeleteCommandListAsync, this, std::placeholders::_1), reinterpret_cast<void*>(pInflightPacket)));
+                cauldron::GPUExecutionPacket* pInflightPacket = new GPUExecutionPacket(m_vecCmdListsForFrame, signalValue, m_pSwapChain->GetBackBufferIndex());
+                GetTaskManager()->AddTask(Task(std::bind(&Framework::DeleteCommandListAsync, this, std::placeholders::_1), reinterpret_cast<void*>(pInflightPacket)));
             }
 
             // End the frame of the profiler

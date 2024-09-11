@@ -38,9 +38,15 @@ namespace cauldron
          */
         void CreateEncoderAndPublisher();
 
-        FILE*             ffmpegPipe = nullptr;
-        std::mutex        m_mutex;
+        // Encoder/Publisher process
+        FILE*             ffmpegPipe   = nullptr;
         std::atomic<bool> m_isPipeOpen = false;
         ResolutionInfo    m_resolutionInfo;
+
+        // Syncronization
+        std::mutex              m_encodeMutex;
+        std::mutex              m_bufferMutex;
+        std::atomic<uint8_t>    m_frameIndex = 0;
+        std::condition_variable m_bufferCV;
     };
 }  // namespace cauldron

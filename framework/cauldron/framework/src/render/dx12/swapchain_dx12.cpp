@@ -255,7 +255,7 @@ namespace cauldron
         CauldronThrowOnFail(GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->Signal(*pFenceReadback, 1));
     }
 
-    void SwapChainInternal::CopyReadbackToMemory(uint8_t** ppData, uint8_t at)
+    std::function<void()> SwapChainInternal::CopyReadbackToMemory(uint8_t** ppData, uint8_t at)
     {
         // Get the readback resource and fence for the current back buffer
         ID3D12Resource** pResourceReadback = &m_pSwapChainReadbackTargets[at];
@@ -275,32 +275,17 @@ namespace cauldron
         size_t              resourceSize = fromDesc.Width;
 
         // Map the resource
-        UINT64*     pFrameData = nullptr;
         D3D12_RANGE range;
         range.Begin = 0;
         range.End   = resourceSize;
-        CauldronThrowOnFail((*pResourceReadback)->Map(0, &range, reinterpret_cast<void**>(&pFrameData)));
-
-        // Resize the memory region to the size of the frame
-        *ppData = (uint8_t*)malloc(resourceSize);
-        if (*ppData == nullptr)
-            goto fail;
-
-        // Copy and unmap the resource
-        memcpy(*ppData, pFrameData, resourceSize);
-        (*pResourceReadback)->Unmap(0, NULL);
-
-        // Signal the fence
-        CauldronThrowOnFail(GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->Signal(*pFenceReadback, 0));
-        return;
-
-    fail:
-        free(*ppData);
-        *ppData = nullptr;
-        (*pResourceReadback)->Unmap(0, NULL);
-        (*pResourceReadback)->Release();
-        *pResourceReadback = nullptr;
-        CauldronCritical(L"Failed to allocate memory for dumping swapchain to memory");
+        CauldronThrowOnFail((*pResourceReadback)->Map(0, &range, reinterpret_cast<void**>(ppData)));
+        return [pResourceReadback, pFenceReadback]() {
+            // Unmap the resource
+            (*pResourceReadback)->Unmap(0, NULL);
+            
+            // Signal the fence
+            CauldronThrowOnFail(GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->Signal(*pFenceReadback, 0));
+        };
     }
 
     void SwapChainInternal::DumpSwapChainToFile(filesystem::path filePath)

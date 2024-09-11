@@ -26,6 +26,7 @@
 #include "render/resourceview.h"
 #include "shaders/shadercommon.h"
 #include "render/commandlist.h"
+#include <functional>
 
 namespace cauldron
 {
@@ -133,7 +134,7 @@ namespace cauldron
         /**
          * @brief   Copies the readback buffer to memory.
          */
-        virtual void CopyReadbackToMemory(uint8_t** ppData, uint8_t at) = 0;
+        virtual std::function<void()> CopyReadbackToMemory(uint8_t** ppData, uint8_t at) = 0;
 
         /**
          * @brief   Creates a screenshot of the current swap chain.

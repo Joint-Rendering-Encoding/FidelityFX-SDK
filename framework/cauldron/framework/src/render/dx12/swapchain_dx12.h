@@ -64,7 +64,7 @@ namespace cauldron
         void Present() override;
         
         void CopySwapChainToReadback(CommandList* pCmdList) override;
-        void CopyReadbackToMemory(uint8_t** ppData, uint8_t at) override;
+        std::function<void()> CopyReadbackToMemory(uint8_t** ppData, uint8_t at) override;
 
         void DumpSwapChainToFile(std::experimental::filesystem::path filePath) override;
 

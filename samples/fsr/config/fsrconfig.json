@@ -236,7 +236,7 @@
         },
 
         "Stream": {
-            "Enabled": true,
+            "Enabled": false,
             "Host": "https://localhost",
             "Port": 4443,
             "Name": "live"

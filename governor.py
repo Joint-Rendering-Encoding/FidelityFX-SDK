@@ -319,6 +319,12 @@ def parse_args():
         default="Native",
         choices=UPSCALERS,
     )
+    parser.add_argument(
+        "--enable-cursor-jitter",
+        action="store_true",
+        default=False,
+        help="Enable cursor jitter",
+    )
     return parser.parse_args()
 
 
@@ -574,11 +580,12 @@ def main(opts):
             "Please make sure the window is visible and not minimized."
         )
 
-        # In case focus fails, try manual focus
-        pyautogui.moveTo(40, 20)
-        pyautogui.click()
-        pyautogui.moveTo(120, 20)
-        pyautogui.click()
+        if opts.enable_cursor_jitter:
+            # In case focus fails, try manual focus
+            pyautogui.moveTo(40, 20)
+            pyautogui.click()
+            pyautogui.moveTo(120, 20)
+            pyautogui.click()
 
     dots = 0
     start_time = time.time()
@@ -593,7 +600,8 @@ def main(opts):
         # If mouse is within jiggling range, move it
         cursor_pos = pyautogui.position()
         if (
-            cursor_pos[0] > 500
+            opts.enable_cursor_jitter
+            and cursor_pos[0] > 500
             and cursor_pos[1] > 500
             and cursor_pos[0] < 900
             and cursor_pos[1] < 900

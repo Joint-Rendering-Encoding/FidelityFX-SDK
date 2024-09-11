@@ -46,47 +46,61 @@ namespace cauldron
         if (!m_isPipeOpen)
             return;
 
+        // Wait until the slot is empty and it's our turn
+        {
+            std::unique_lock<std::mutex> lock(m_bufferMutex);
+            m_bufferCV.wait(lock, [&] { return m_frameIndex == backbufferIndex; });
+            CauldronAssert(ASSERT_CRITICAL, m_frameIndex == backbufferIndex, L"Frame index mismatch");
+        }
+
         // Copy the encoder target to system memory
-        uint8_t* pFrameData = nullptr;
-        GetFramework()->GetSwapChain()->CopyReadbackToMemory(&pFrameData, backbufferIndex);
+        uint8_t* pFrameData  = nullptr;
+        auto     releaseFunc = GetFramework()->GetSwapChain()->CopyReadbackToMemory(&pFrameData, backbufferIndex);
         CauldronAssert(ASSERT_CRITICAL, pFrameData != nullptr, L"Failed to copy encoder target data");
 
         {
             // Only one thread can pipe data to FFmpeg at a time
-            std::lock_guard<std::mutex> lock(m_mutex);
+            std::lock_guard<std::mutex> lock(m_encodeMutex);
 
             // Backbuffer might've queued up while the pipe was closed
             if (!m_isPipeOpen || !pFrameData)
                 goto fail;
 
-            int tries = 0;
-        repeat:
-            // Write the frame data to FFmpeg pipe
+            int      tries        = 0;
             uint32_t frameSize    = GetConfig()->Width * GetConfig()->Height * GetResourceFormatStride(ResourceFormat::RGBA8_UINT);
-            size_t   bytesWritten = fwrite(pFrameData, 1, frameSize, ffmpegPipe);
+            size_t   bytesWritten = 0;
 
-            // Check if the pipe is still open
-            if (bytesWritten != frameSize)
+            while (tries < 3)
             {
-                _pclose(ffmpegPipe);
+                // Write the frame data to FFmpeg pipe
+                bytesWritten = fwrite(pFrameData, 1, frameSize, ffmpegPipe);
 
-                if (tries++ > 3)
+                // Check if the pipe is still open
+                if (bytesWritten == frameSize)
                 {
-                    m_isPipeOpen = false;
-                    CauldronWarning(L"FFmpeg pipe closed unexpectedly. Streaming will be disabled.");
-                    goto fail;
+                    fflush(ffmpegPipe);
+                    goto release;
                 }
 
+                // If the pipe is closed, try to reopen it
+                _pclose(ffmpegPipe);
                 CreateEncoderAndPublisher();
-                goto repeat;
+                tries++;
             }
 
-            fflush(ffmpegPipe);
-        }
+        fail:
+            CauldronWarning(L"Failed to pipe frame data to FFmpeg, disabling streaming...");
+            m_isPipeOpen = false;
+            _pclose(ffmpegPipe);
 
-    fail:
-        // Free the frame data
-        free(pFrameData);
+        release:
+            // Free the frame data
+            releaseFunc();
+
+            // Update the frame index and notify other threads
+            m_frameIndex = (backbufferIndex + 1) % GetFramework()->GetSwapChain()->GetBackBufferCount();
+            m_bufferCV.notify_all();
+        }
     }
 
     void Streamer::ExecuteCopyCommand(CommandList* pCmdList)

@@ -155,6 +155,10 @@ namespace cauldron
             // Only one thread can pipe data to FFmpeg at a time
             std::lock_guard<std::mutex> lock(m_encodeMutex);
 
+            // Don't send bootstrapping frames
+            if (frameIndex < 0)
+                goto release;
+
             // Backbuffer might've queued up while the pipe was closed
             if (!m_isPipeOpen || !pFrameData)
                 goto fail;

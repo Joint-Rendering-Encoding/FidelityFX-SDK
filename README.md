@@ -96,8 +96,20 @@ python governor.py --render-res 1285 835 --upscaler FSR3 --stream
 
 ### Viewing the stream
 
-This part is left to the user. [moq-rs](https://github.com/kixelated/moq-rs) repository offers [moq-js](https://github.com/kixelated/moq-js) to setup a simple web server to view the stream. It is also possible to view the stream over [quic.video](https://quic.video/).
+This repository includes a simple web page to view the stream. Checkout the `demo/` directory and run the following command:
 
-Easiest way is to go to https://quic.video/watch/live?server=localhost:4443 and view the stream.
+```bash
+npm run preview
+```
+
+> This server will be launched if you use the `--stream` flag in the governor script.
+
+Or if you want to quickly verify the stream, you can visit the following URL:
+
+```bash
+https://quic.video/watch/live?server=localhost:4443
+```
+
+and view the stream.
 
 > Warning: If you encounter TLS errors, please make sure to run the `SetupMOQ.bat` script again.

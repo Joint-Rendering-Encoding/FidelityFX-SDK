@@ -400,11 +400,9 @@ namespace cauldron
         m_LastFrameTime = std::chrono::system_clock::now();
 
         // Initialize the Streamer if we are streaming
+        m_pStreamer = new Streamer();
         if (m_Config.Streaming)
-        {
-            m_pStreamer = new Streamer();
             m_pStreamer->Init();
-        }
 
         return 0;
     }
@@ -625,11 +623,8 @@ namespace cauldron
         }
 
         // Shutdown the encoder
-        if (m_Config.Streaming)
-        {
-            m_pStreamer->Shutdown();
-            delete m_pStreamer;
-        }
+        m_pStreamer->Shutdown();
+        delete m_pStreamer;
 
         // Terminate the task manager
         m_pTaskManager->Shutdown();
@@ -1685,9 +1680,8 @@ namespace cauldron
 
         // Need to exclude begin CPUFrame from our timings due to switch over (maybe should move CPU timing collection to end of frame?)
         CPUScopedProfileCapture marker(L"Begin Frame");
-        
-        if (m_Config.Streaming)
-            m_pStreamer->ReportTiming(StreamTimingType::BeginFrame, m_PerfFrameCount);
+
+        m_pStreamer->ReportTiming(StreamTimingType::BeginFrame, m_PerfFrameCount);
 
         // Make sure the swapchain is ready for this frame
         m_pSwapChain->WaitForSwapChain();
@@ -1775,8 +1769,7 @@ namespace cauldron
         m_pDevice->WaitOnQueue(pInflightPacket->CompletionID, CommandQueue::Graphics);
 
         // Encode the frame
-        if (m_Config.Streaming)
-            m_pStreamer->Encode(pInflightPacket->CurrentBackBufferIndex, pInflightPacket->FrameID);
+        m_pStreamer->Encode(pInflightPacket->CurrentBackBufferIndex, pInflightPacket->FrameID);
 
         // Delete them to release the allocators
         for (auto cmdListIter = pInflightPacket->CmdLists.begin(); cmdListIter != pInflightPacket->CmdLists.end(); ++cmdListIter)

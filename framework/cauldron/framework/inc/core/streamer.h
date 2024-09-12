@@ -1,6 +1,7 @@
 #pragma once
 #include "core/framework.h"
 #include <mutex>
+#include <chrono>
 
 namespace cauldron
 {
@@ -10,6 +11,8 @@ namespace cauldron
         EndFrame,
         EncodeFrame,
     };
+
+    using time_stamp = std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds>;
 
     class Streamer
     {
@@ -46,11 +49,11 @@ namespace cauldron
          */
         void ReportTiming(StreamTimingType type, int64_t frameIndex)
         {
-            auto timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch());
+            time_stamp ts = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
             if (frameIndex >= 0)
             {
                 std::lock_guard<std::mutex> lock(m_timingMutex);
-                m_timingInfo[frameIndex][static_cast<uint32_t>(type)] = timestamp;
+                m_timingInfo[frameIndex][static_cast<uint32_t>(type)] = ts.time_since_epoch();
             }
         }
 

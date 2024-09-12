@@ -423,6 +423,23 @@ def main(opts):
         else:
             print(f"Relay PID: {relay.pid}")
 
+        web = subprocess.Popen(
+            ["npm", "start"],
+            shell=True,
+            cwd=os.path.join(SCRIPT_DIR, "demo"),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+        if web.poll() is not None:
+            raise ValueError("Failed to start the web server process")
+        if opts.structured_logs:
+            print("WEB_PID", web.pid)
+            sys.stdout.flush()
+        else:
+            print(f"Web PID: {web.pid}")
+            print("Web server started at https://localhost:3000")
+
     # For Native rendering, match the render resolution to the present resolution
     if opts.upscaler == "Native":
         if opts.render_res != opts.present_res:
@@ -544,6 +561,7 @@ def main(opts):
         # Close the relay process
         if opts.stream:
             relay.kill()
+            web.kill()
 
         # Exit with the appropriate code
         if non_zero:

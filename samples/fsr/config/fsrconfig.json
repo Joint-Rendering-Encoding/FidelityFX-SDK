@@ -226,7 +226,7 @@
             "Fullscreen": false,
             "Width": 2560,
             "Height": 1440,
-            "Mode":  0
+            "Mode": 0
         },
 
         "FPSLimiter": {

@@ -28,3 +28,8 @@ copy localhost.key ..\..\..\bin\cert\localhost.key
 
 :: Return to the root directory
 cd ..\..\..
+
+:: Build the demo page
+cd demo
+npm install && npm run build
+cd ..

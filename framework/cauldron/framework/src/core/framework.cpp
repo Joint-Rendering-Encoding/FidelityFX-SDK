@@ -59,6 +59,7 @@
 
 #include <fstream>
 #include <algorithm>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <cctype>
@@ -1589,7 +1590,8 @@ namespace cauldron
         ++m_FrameID;
 
         // Start updating the CPU counters first to catch any waiting on swapchain
-        m_pProfiler->BeginCPUFrame();
+        if (!m_Config.EnableBenchmark || (m_Config.EnableBenchmark && m_PerfFrameCount >= -1))
+            m_pProfiler->BeginCPUFrame();
 
         static bool loggedLoadingTime = false;
         if (!loggedLoadingTime && !m_pContentManager->IsCurrentlyLoading())
@@ -1694,7 +1696,8 @@ namespace cauldron
         SetAllResourceViewHeaps(m_pCmdListForFrame);
 
         // Start GPU counters now that we have a cmd list
-        m_pProfiler->BeginGPUFrame(m_pCmdListForFrame);
+        if (!m_Config.EnableBenchmark || (m_Config.EnableBenchmark && m_PerfFrameCount >= 0))
+            m_pProfiler->BeginGPUFrame(m_pCmdListForFrame);
 
         // If upscaler is enabled, we will be in a pre-upscale state until the upscaler is executed and updates the state
         if (m_UpscalerEnabled)
@@ -1713,7 +1716,7 @@ namespace cauldron
         m_LastFrameTime = now;
 
         // If we are in benchmark mode, we fix the delta time to 1/FPS
-        if (m_Config.EnableBenchmark)
+        if (m_Config.EnableBenchmark && (m_Config.TakeScreenshot || m_Config.TakeScreenshotForVideo))
         {
             if (m_Config.BenchmarkFrameDuration < UINT32_MAX)
             {
@@ -1798,7 +1801,26 @@ namespace cauldron
             }
 
             // End the frame of the profiler
-            m_pProfiler->EndFrame(m_pCmdListForFrame);
+            if (!m_Config.EnableBenchmark || (m_Config.EnableBenchmark && m_PerfFrameCount >= 0))
+                m_pProfiler->EndFrame(m_pCmdListForFrame);
+
+            // Report the frame timings
+            static std::chrono::time_point<std::chrono::steady_clock> lastTime = std::chrono::steady_clock::now();
+            std::chrono::time_point<std::chrono::steady_clock> currentTime = std::chrono::steady_clock::now();
+            double elapsedTime = std::chrono::duration<double>(currentTime - lastTime).count();
+            bool shouldReport = elapsedTime > 0.25;
+            if (m_Config.EnableBenchmark && m_PerfFrameCount >= 0 && m_CpuPerfStats.size() > 0 && shouldReport)
+            {
+                lastTime = currentTime;
+                json data = json::object({{"delta_ms", m_DeltaTime * 1000.0}});
+
+                std::wstringstream ss;
+                ss << L"<TELEMETRY>";
+                ss << StringToWString(data.dump());
+                ss << L"</TELEMETRY>";
+                std::wcout << ss.str() << std::endl;
+                std::wcout.flush();
+            }
 
             // Can't be referenced until next time BeginFrame is called
             m_pDeviceCmdListForFrame = nullptr;

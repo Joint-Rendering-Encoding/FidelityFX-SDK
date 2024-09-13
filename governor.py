@@ -1,3 +1,4 @@
+import re
 import os
 import sys
 import json
@@ -278,9 +279,14 @@ def parse_args():
     )
     parser.add_argument(
         "--stream",
+        type=str,
+        help="Stream the upscaled content over Media-over-QUIC and sets the namespace to the value. Launches moq-relay.exe (unless --disable-supplementary is set) and configures the upscaler to stream the content",
+    )
+    parser.add_argument(
+        "--disable-supplementary",
         action="store_true",
         default=False,
-        help="Stream the upscaled content over Media-over-QUIC. Launches moq-relay.exe and configures the upscaler to stream the content",
+        help="Disable supplementary processes",
     )
     parser.add_argument(
         "--use-release-build",
@@ -398,7 +404,7 @@ def main(opts):
     )
 
     # If streaming is enabled, launch the moq-relay process
-    if opts.stream:
+    if opts.stream and not opts.disable_supplementary:
         relay = subprocess.Popen(
             [
                 os.path.join(FSR_DIR, "moq-relay.exe"),
@@ -559,7 +565,7 @@ def main(opts):
             upscaler.kill()
 
         # Close the relay process
-        if opts.stream:
+        if opts.stream and not opts.disable_supplementary:
             relay.kill()
             web.kill()
 
@@ -646,12 +652,35 @@ def main(opts):
         if not opts.skip_upscaler and upscaler.poll() is not None:
             break
 
-        if not opts.structured_logs:
+        # Check telemetry
+        processes = [renderer] + ([upscaler] if not opts.skip_upscaler else [])
+        while processes:
+            p = processes[-1]
+            line = p.stdout.readline()
+            if not line:
+                processes.pop()
+                continue
+
+            data = re.search(b"<TELEMETRY>(.*)</TELEMETRY>", line, re.IGNORECASE)
+            if not data:
+                continue
+
+            if opts.structured_logs:
+                print(f"TELEMETRY_{p.pid}", line.decode().strip())
+                sys.stdout.flush()
+            else:
+                values = json.loads(data.group(1).decode().strip())
+                print(
+                    f"Got telemetry for {p.pid}: min={values['min_ms']:.4f}ms, avg={values['avg_ms']:.4f}ms, max={values['max_ms']:.4f}ms{'.' * dots + ' ' * (4 - dots)}",
+                    end="\r",
+                )
+
+        if not opts.structured_logs and opts.benchmark > 0:
             print(
                 f"Waiting for process(es) to finish{'.' * dots + ' ' * (4 - dots)}",
-                end="\r",
+                end="\r" if not opts.skip_upscaler else "\n",
             )
-            dots = (dots + 1) % 4
+        dots = (dots + 1) % 4
         time.sleep(0.5)
 
     if opts.structured_logs:

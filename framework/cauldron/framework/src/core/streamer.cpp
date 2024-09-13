@@ -129,17 +129,19 @@ namespace cauldron
 
     void Streamer::Encode(uint8_t backbufferIndex, int64_t frameIndex)
     {
+        // Record when the frame has finished rendering
+        ReportTiming(StreamTimingType::EndFrame, frameIndex);
+
         // Don't waste time if the pipe is closed
         if (!m_isPipeOpen)
             return;
 
-        // Record when the frame has finished rendering
-        ReportTiming(StreamTimingType::EndFrame, frameIndex);
-
         // Wait until the slot is empty and it's our turn
+        // If the frame index is negative, it's a bootstrapping frame and let it pass
+        if (frameIndex >= 0)
         {
             std::unique_lock<std::mutex> lock(m_bufferMutex);
-            m_bufferCV.wait(lock, [&] { return m_frameIndex == backbufferIndex || !m_isPipeOpen; });
+            m_bufferCV.wait(lock, [&] { return m_frameIndex == frameIndex || !m_isPipeOpen; });
         }
 
         // Again, don't waste time if the pipe is closed
@@ -157,7 +159,10 @@ namespace cauldron
 
             // Don't send bootstrapping frames
             if (frameIndex < 0)
-                goto release;
+            {
+                releaseFunc();
+                return;
+            }
 
             // Backbuffer might've queued up while the pipe was closed
             if (!m_isPipeOpen || !pFrameData)
@@ -195,7 +200,7 @@ namespace cauldron
             releaseFunc();
 
             // Update the frame index and notify other threads
-            m_frameIndex = (backbufferIndex + 1) % GetFramework()->GetSwapChain()->GetBackBufferCount();
+            m_frameIndex++;
             m_bufferCV.notify_all();
         }
     }

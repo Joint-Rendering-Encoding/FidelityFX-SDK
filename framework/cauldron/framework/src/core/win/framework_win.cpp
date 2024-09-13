@@ -292,6 +292,9 @@ namespace cauldron
         // Show the window if needed
         ShowWindow(m_WindowHandle, m_CmdShow);
 
+        // Set the thread priority to the highest
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+
         // Init presentation mode
         m_PresentationMode = m_pFramework->m_Config.Fullscreen ? PRESENTATIONMODE_BORDERLESS_FULLSCREEN : PRESENTATIONMODE_WINDOWED;
         if (m_PresentationMode == PRESENTATIONMODE_BORDERLESS_FULLSCREEN)

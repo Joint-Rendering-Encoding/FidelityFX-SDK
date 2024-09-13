@@ -83,7 +83,7 @@ namespace cauldron
         std::mutex              m_encodeMutex;
         std::mutex              m_bufferMutex;
         std::mutex              m_timingMutex;
-        std::atomic<uint8_t>    m_frameIndex = 0;
+        std::atomic<int64_t>    m_frameIndex = 0;
         std::condition_variable m_bufferCV;
     };
 }  // namespace cauldron

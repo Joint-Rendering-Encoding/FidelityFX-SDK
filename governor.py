@@ -283,6 +283,12 @@ def parse_args():
         help="Stream the upscaled content over Media-over-QUIC and sets the namespace to the value. Launches moq-relay.exe (unless --disable-supplementary is set) and configures the upscaler to stream the content",
     )
     parser.add_argument(
+        "--hide-ui",
+        action="store_true",
+        default=False,
+        help="Hide the UI, indirectly enabled by --stream",
+    )
+    parser.add_argument(
         "--disable-supplementary",
         action="store_true",
         default=False,
@@ -365,7 +371,7 @@ def close_by_pid(pid):
     return False
 
 
-def get_process_args(mode, screenshot_mode=None, duration=0, has_fg=False):
+def get_process_args(mode, screenshot_mode=None, duration=0, has_fg=False, hide_ui=False):
     if screenshot_mode == "video":
         screenshot = "-screenshot-for-video"
     elif screenshot_mode == "image":
@@ -377,6 +383,7 @@ def get_process_args(mode, screenshot_mode=None, duration=0, has_fg=False):
         (
             screenshot if mode != "Renderer" else ""
         ),  # Always ignore screenshot for renderer
+        "-hide-ui" if hide_ui else "",
         "-displaymode",
         "DISPLAYMODE_LDR",
         "-benchmark",
@@ -404,6 +411,7 @@ def main(opts):
     )
 
     # If streaming is enabled, launch the moq-relay process
+    opts.hide_ui = opts.hide_ui or opts.stream
     if opts.stream and not opts.disable_supplementary:
         relay = subprocess.Popen(
             [
@@ -470,6 +478,7 @@ def main(opts):
                 screenshot_mode=opts.screenshot,
                 duration=opts.benchmark * opts.fps,
                 has_fg=opts.upscaler in FRAME_GENERATION,
+                hide_ui=opts.hide_ui,
             ),
         ],
         cwd=FSR_DIR,
@@ -515,6 +524,7 @@ def main(opts):
                     screenshot_mode=opts.screenshot,
                     duration=opts.benchmark * opts.fps,
                     has_fg=opts.upscaler in FRAME_GENERATION,
+                    hide_ui=opts.hide_ui,
                 ),
             ],
             cwd=FSR_DIR,

@@ -379,7 +379,7 @@ namespace cauldron
             GetTaskManager()->AddTask(task);
 
         // Hide the UI if we'll take a screenshot
-        if (m_Config.TakeScreenshot || m_Config.TakeScreenshotForVideo)
+        if (m_Config.TakeScreenshot || m_Config.TakeScreenshotForVideo || m_Config.HideUI)
             GetUIManager()->HideUI();
 
         // Request startup content
@@ -1352,6 +1352,12 @@ namespace cauldron
             if (command == L"-screenshot-for-video")
             {
                 m_Config.TakeScreenshotForVideo = true;
+                continue;
+            }
+
+            if (command == L"-hide-ui")
+            {
+                m_Config.HideUI = true;
                 continue;
             }
 

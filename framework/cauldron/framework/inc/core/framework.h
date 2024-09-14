@@ -158,6 +158,7 @@ namespace cauldron
 
         // Streaming
         bool Streaming : 1;
+        bool HideUI : 1;
 
         // Acceleration Structure
         bool BuildRayTracingAccelerationStructure : 1;

@@ -86,7 +86,9 @@ namespace cauldron
         va_end(args);
 
         Log::Write(LOGLEVEL_FATAL, buffer);
+#if defined(_DEBUG)
         MessageBoxW(NULL, buffer, L"Critical Error", MB_OK);
+#endif // #if defined(_DEBUG)
         throw 1;
     }
 

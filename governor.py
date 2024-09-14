@@ -681,7 +681,7 @@ def main(opts):
             else:
                 values = json.loads(data.group(1).decode().strip())
                 print(
-                    f"Got telemetry for {p.pid}: min={values['min_ms']:.4f}ms, avg={values['avg_ms']:.4f}ms, max={values['max_ms']:.4f}ms{'.' * dots + ' ' * (4 - dots)}",
+                    f"Got telemetry for {p.pid}: min={values['delta_ms']:.4f}ms{'.' * dots + ' ' * (4 - dots)}",
                     end="\r",
                 )
 

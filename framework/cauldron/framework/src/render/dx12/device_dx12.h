@@ -98,6 +98,7 @@ namespace cauldron
         };
 
         void InitDevice();
+        HRESULT SelectHighPerformanceAdapter(Microsoft::WRL::ComPtr<IDXGIFactory6>& pFactory6);
         void InitQueueSyncPrim(CommandQueue queueType, QueueSyncPrimitive& queueSyncPrim, const wchar_t* name);
 
         // internal implementations

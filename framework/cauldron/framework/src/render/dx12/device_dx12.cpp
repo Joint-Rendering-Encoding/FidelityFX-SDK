@@ -119,11 +119,9 @@ namespace cauldron
 
         // Try to get Factory6 in order to use EnumAdapterByGpuPreference method. If it fails, fall back to regular EnumAdapters.
         if (S_OK == pFactory->QueryInterface(IID_PPV_ARGS(&pFactory6)))
-            CauldronThrowOnFail(pFactory6->EnumAdapterByGpuPreference(0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&m_pAdapter)));
-
+            CauldronThrowOnFail(SelectHighPerformanceAdapter(pFactory6));
         else
             CauldronThrowOnFail(pFactory->EnumAdapters(0, &m_pAdapter));
-
 
         // Init the device
         InitDevice();
@@ -258,6 +256,53 @@ namespace cauldron
         if (GetConfig()->DeveloperMode == true) {
             atexit(&ReportLiveObjects);
         }
+    }
+
+    HRESULT DeviceInternal::SelectHighPerformanceAdapter(ComPtr<IDXGIFactory6>& pFactory6)
+    {
+        // Use IDXGIFactory6 to get the high-performance GPU with the most available VRAM
+        SIZE_T                maxAvailableVRAM = 0;
+        ComPtr<IDXGIAdapter1> adapter;
+
+        for (UINT adapterIndex = 0;
+             pFactory6->EnumAdapterByGpuPreference(adapterIndex, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapter)) != DXGI_ERROR_NOT_FOUND;
+             ++adapterIndex)
+        {
+            DXGI_ADAPTER_DESC1 adapterDesc;
+            adapter->GetDesc1(&adapterDesc);
+
+            // Skip adapters that are not hardware adapters (integrated or software)
+            if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+                continue;  // Skip software adapters
+
+            // Ensure the adapter has dedicated video memory (likely to be a discrete GPU)
+            if (adapterDesc.DedicatedVideoMemory == 0)
+                continue;  // Skip integrated GPUs
+
+            // Check available VRAM for high-performance GPUs
+            Microsoft::WRL::ComPtr<ID3D12Device> testDevice;
+            if (SUCCEEDED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&testDevice))))
+            {
+                DXGI_QUERY_VIDEO_MEMORY_INFO          videoMemoryInfo = {};
+                Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3;
+                if (SUCCEEDED(adapter.As(&adapter3)) && SUCCEEDED(adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &videoMemoryInfo)))
+                {
+                    D3D12_FEATURE_DATA_ARCHITECTURE1 architecture = {0};
+                    testDevice->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE1, &architecture, sizeof(architecture));
+                    if (architecture.UMA)
+                        continue;  // Skip GPUs that are Unified Memory Architecture (likely iGPUs)
+
+                    if (videoMemoryInfo.AvailableForReservation > maxAvailableVRAM)
+                    {
+                        maxAvailableVRAM = videoMemoryInfo.AvailableForReservation;
+                        m_pAdapter       = adapter;
+                        Log::Write(LOGLEVEL_INFO, L"Adapter: %ls has %d MB VRAM", adapterDesc.Description, maxAvailableVRAM / 1024 / 1024);
+                    }
+                }
+            }
+        }
+
+        return !m_pAdapter ? DXGI_ERROR_NOT_FOUND : S_OK;
     }
 
     void DeviceInternal::InitQueueSyncPrim(CommandQueue queueType, QueueSyncPrimitive& queueSyncPrim, const wchar_t* queueName)

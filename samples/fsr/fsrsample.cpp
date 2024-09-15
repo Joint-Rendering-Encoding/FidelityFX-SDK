@@ -323,7 +323,8 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
     }
 
     // Check if module is supported
-    CauldronAssert(ASSERT_CRITICAL, !m_pCurrentUpscaler->ModuleNotSupported(), L"Upscaler not supported");
+    if (m_pCurrentUpscaler)
+        CauldronAssert(ASSERT_CRITICAL, !m_pCurrentUpscaler->ModuleNotSupported(), L"Upscaler not supported");
 
     // Enable the new one
     if (m_pCurrentUpscaler)

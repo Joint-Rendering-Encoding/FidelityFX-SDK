@@ -274,7 +274,7 @@ FSR3RenderModule::~FSR3RenderModule()
 #ifdef FFX_API_CAULDRON
     // FSR3 not supported in cauldron backend, so proxy swapchain destruction is not required
 #elif defined(FFX_API_DX12)
-    //if (false)
+    if (false)
     {
         cauldron::SwapChain* pSwapchain  = GetFramework()->GetSwapChain();
         IDXGISwapChain4*     pSwapChain4 = pSwapchain->GetImpl()->DX12SwapChain();

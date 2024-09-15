@@ -33,7 +33,7 @@ if not exist build\ (
 )
 
 cd build
-cmake -A x64 .. -DBUILD_TYPE=FFX_FSR -DFFX_API=NATIVE -DFFX_BUILD_AS_DLL=1
+cmake -G "Visual Studio 17 2022" -A x64 .. -DBUILD_TYPE=FFX_FSR -DFFX_API=NATIVE -DFFX_BUILD_AS_DLL=1
 
 :: Come back to root level
 cd ..

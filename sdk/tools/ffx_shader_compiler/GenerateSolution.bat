@@ -22,7 +22,7 @@ if not exist build\ (
 )
 
 cd build
-cmake -A x64 ..
+cmake -G "Visual Studio 17 2022" -A x64 ..
 cd..
 
 :: Pause so the user can acknowledge any errors or other outputs from the build process

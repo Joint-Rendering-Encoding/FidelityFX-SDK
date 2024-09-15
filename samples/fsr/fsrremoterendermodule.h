@@ -48,6 +48,11 @@ public:
      */
     void Execute(double deltaTime, cauldron::CommandList* pCmdList) override;
 
+    /**
+     * @brief   Recreate the FSR Remote API Context to resize internal resources. Called by the framework when the resolution changes.
+     */
+    void OnResize(const cauldron::ResolutionInfo& resInfo) override;
+
 private:
     // Resolution info
     uint32_t m_RenderWidth  = 2560;

@@ -94,22 +94,6 @@ FSRRemoteRenderModule::~FSRRemoteRenderModule()
         EnableModule(false);
 }
 
-void FSRRemoteRenderModule::OnResize(const ResolutionInfo& resInfo)
-{
-    if (!ModuleEnabled() || resInfo.RenderWidth == m_RenderWidth && resInfo.RenderHeight == m_RenderHeight)
-        return;
-
-    // Force enable upscaling with our resolution
-    GetFramework()->EnableUpscaling(true, [&](uint32_t displayWidth, uint32_t displayHeight) {
-        return ResolutionInfo{
-            m_RenderWidth,
-            m_RenderHeight,
-            displayWidth,
-            displayHeight,
-        };
-    });
-}
-
 void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 {
     // Skip if we are in only resizing mode

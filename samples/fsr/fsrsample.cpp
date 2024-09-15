@@ -185,6 +185,12 @@ int32_t FSRSample::DoSampleInit()
     if (HasCapability(FrameworkCapability::Renderer) && GetConfig()->EnableJitter)
     {
         CameraJitterCallback jitterCallback = [this](Vec2& values) {
+            if (!UpscalerEnabled())
+            {
+                values = Vec2(0.f, 0.f);
+                return;
+            }
+
             // Update FSR3 jitter for built in TAA
             const ResolutionInfo& resInfo          = GetFramework()->GetResolutionInfo();
             // Using the first 10 phases for now. Beyond that has some issues with frame generation

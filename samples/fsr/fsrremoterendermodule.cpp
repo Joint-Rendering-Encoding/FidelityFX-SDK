@@ -99,6 +99,10 @@ void FSRRemoteRenderModule::OnResize(const ResolutionInfo& resInfo)
     if (!ModuleEnabled() || resInfo.RenderWidth == m_RenderWidth && resInfo.RenderHeight == m_RenderHeight)
         return;
 
+    // If we are not in benchmark mode, we don't need to force the resolution
+    if (!GetConfig()->EnableBenchmark)
+        return;
+
     // Force enable upscaling with our resolution
     GetFramework()->EnableUpscaling(true, [&](uint32_t displayWidth, uint32_t displayHeight) {
         return ResolutionInfo{

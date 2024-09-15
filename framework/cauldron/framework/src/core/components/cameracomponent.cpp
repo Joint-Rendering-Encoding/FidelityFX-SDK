@@ -312,13 +312,13 @@ namespace cauldron
             }
 
             // Do camera animation (if we have any)
-            {
+            const CameraAnimationData animData = GetFramework()->GetConfig()->StartupContent.CameraAnimation;
+            if (animData.enabled) {
                 uint64_t            bufferIndex   = GetFramework()->GetBufferIndexMonotonic();
-                CameraAnimationData pAnimData     = GetFramework()->GetConfig()->StartupContent.CameraAnimation;
-                double              animationTime = bufferIndex * pAnimData.spd;
+                double              animationTime = bufferIndex * animData.spd;
 
-                Vec4 eyePos = GetTorusPosition(pAnimData.p, pAnimData.q, pAnimData.xo, pAnimData.yo, pAnimData.zo, animationTime);
-                Vec4 lookAt = Vec4(pAnimData.lx, pAnimData.ly, pAnimData.lz, 1.f);
+                Vec4 eyePos = GetTorusPosition(animData.p, animData.q, animData.xo, animData.yo, animData.zo, animationTime);
+                Vec4 lookAt = Vec4(animData.lx, animData.ly, animData.lz, 1.f);
                 LookAtActual(eyePos, lookAt);
             }
 

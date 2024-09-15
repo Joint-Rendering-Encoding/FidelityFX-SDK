@@ -85,6 +85,11 @@ namespace cauldron
         bool ModuleEnabled() const { return m_ModuleEnabled; }
 
         /**
+         * @brief   Returns true if the render module is not supported.
+         */
+        bool ModuleNotSupported() const { return m_ModuleNotSupported; }
+
+        /**
          * @brief   Returns the render module name.
          */
         const wchar_t* GetName() const { return m_Name.c_str(); }
@@ -94,14 +99,16 @@ namespace cauldron
         NO_COPY(RenderModule)
         NO_MOVE(RenderModule)
 
-        std::atomic_bool    m_ModuleReady   = false;
-        std::atomic_bool    m_ModuleEnabled = true;
+        std::atomic_bool m_ModuleReady        = false;
+        std::atomic_bool m_ModuleEnabled      = true;
+        std::atomic_bool m_ModuleNotSupported = false;
 
     protected:
         RenderModule() = default;
 
         void SetModuleReady(bool state) { m_ModuleReady = state; }
         void SetModuleEnabled(bool state) { m_ModuleEnabled = state; }
+        void SetModuleNotSupported(bool state) { m_ModuleNotSupported = state; }
 
     protected:
 

@@ -58,7 +58,14 @@ void DLSSUpscaleRenderModule::Init(const json& initData)
             }
             i++;
         }
-        CauldronAssert(ASSERT_CRITICAL, success > 0, L"DLSS is not supported on this system");
+        if (success == 0)
+        {
+            CauldronWarning(L"DLSS is not supported on this system");
+            SetModuleNotSupported(true);
+            SetModuleEnabled(false);
+            SetModuleReady(true);
+            return;
+        }
     }
     else
         CauldronCritical(L"Failed to create DXGI Factory");

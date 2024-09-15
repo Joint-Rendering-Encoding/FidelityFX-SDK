@@ -240,6 +240,12 @@ int32_t FSRSample::DoSampleInit()
     std::vector<std::string> comboOptions;
     comboOptions.assign(upscalers, upscalers + _countof(upscalers));
 
+    // Check DLSS-G Support
+    if (m_pDLSSRenderModule->ModuleNotSupported())
+        comboOptions.erase(comboOptions.begin() + 9);
+    if (m_pDLSSUpscaleRenderModule->ModuleNotSupported())
+        comboOptions.erase(comboOptions.begin() + 8);
+
     // Add the section header
     uiSection.AddCombo("Method", reinterpret_cast<int32_t*>(&m_UIMethod), &comboOptions);
     GetUIManager()->RegisterUIElements(uiSection);
@@ -315,6 +321,9 @@ void FSRSample::SwitchUpscaler(UpscaleMethod newUpscaler)
         CauldronCritical(L"Unsupported upscaler requested.");
         break;
     }
+
+    // Check if module is supported
+    CauldronAssert(ASSERT_CRITICAL, !m_pCurrentUpscaler->ModuleNotSupported(), L"Upscaler not supported");
 
     // Enable the new one
     if (m_pCurrentUpscaler)

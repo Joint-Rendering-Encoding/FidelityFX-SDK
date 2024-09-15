@@ -36,8 +36,9 @@ namespace cauldron
 
     static Vec4 GetTorusPosition(double p, double q, double xOff, double yOff, double zOff, double totalTime)
     {
-        double r1 = 2.0f;
-        double r2 = 1.0f;
+        // Magic numbers for torus
+        double r1 = p / 6.f;
+        double r2 = q / 3.f;
 
         double x = (r1 + r2 * cos(q * totalTime)) * cos(p * totalTime) + xOff;
         double y = (r1 + r2 * cos(q * totalTime)) * sin(p * totalTime) + yOff;

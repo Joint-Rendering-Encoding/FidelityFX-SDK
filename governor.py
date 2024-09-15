@@ -108,6 +108,11 @@ def get_config(mode, opts):
             "../media/Brutalism/BrutalistHall.gltf"
         ]
         tmp["FidelityFX FSR"]["Content"]["Camera"] = "persp9_Orientation"
+    elif opts.scene == "Bistro":
+        tmp["FidelityFX FSR"]["Content"]["Scenes"] = [
+            "../media/BistroInterior/BistroInrterior.gltf"
+        ]
+        tmp["FidelityFX FSR"]["Content"]["Camera"] = "Camera_6" # 5 is visually better but 6 is more GPU intensive
     else:
         raise ValueError("Invalid scene")
 
@@ -148,6 +153,19 @@ def get_config(mode, opts):
             "lx": 30.0,
             "ly": 2.0,
             "lz": -30.0,
+        }
+    elif opts.scene == "Bistro":
+        tmp["FidelityFX FSR"]["Content"]["Animation"] = {
+            "Enabled": True,
+            "p": 3,
+            "q": 1,
+            "xo": -0.05,
+            "yo": 3.8,
+            "zo": -0.9,
+            "spd": spd,
+            "lx": 12.0,
+            "ly": 3.0,
+            "lz": -3.5,
         }
 
     # Remove content on upscaler if running in detached mode
@@ -243,7 +261,7 @@ def parse_args():
         "--scene",
         type=str,
         default="Sponza",
-        choices=["Sponza", "Brutalism"],
+        choices=["Sponza", "Brutalism", "Bistro"],
         help="Scene to use",
     )
     parser.add_argument(
@@ -371,7 +389,9 @@ def close_by_pid(pid):
     return False
 
 
-def get_process_args(mode, screenshot_mode=None, duration=0, has_fg=False, hide_ui=False):
+def get_process_args(
+    mode, screenshot_mode=None, duration=0, has_fg=False, hide_ui=False
+):
     if screenshot_mode == "video":
         screenshot = "-screenshot-for-video"
     elif screenshot_mode == "image":

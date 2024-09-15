@@ -1526,8 +1526,15 @@ namespace cauldron
         }
 
         // If the scene is not yet ready, skip to end frame
+        static bool loggedSceneReady = false;
         if (m_pScene->IsReady())
         {
+            if (!loggedSceneReady) {
+                // Write to stdout that we are running
+                std::wcout << L"Running " << GetName() << std::endl;
+                loggedSceneReady = true;
+            }
+
             // Do any scene updates (setup scene info for the frame, etc.)
             {
                 CPUScopedProfileCapture marker(L"UpdateScene");

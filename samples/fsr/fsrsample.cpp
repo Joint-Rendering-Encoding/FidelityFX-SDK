@@ -348,6 +348,9 @@ void FSRSample::DoSampleUpdates(double deltaTime)
     float                 upscaleFactor = std::max(resInfo.GetDisplayWidthScaleRatio(), resInfo.GetDisplayHeightScaleRatio());
     GetScene()->SetMipLODBias(CalculateMipBias(upscaleFactor));
 
+    if (m_Method == UpscaleMethod::Native && GetUpscalingState() != UpscalerState::None)
+        EnableUpscaling(false);
+
     // Rest is only needed if we are in Upscaler mode
     if (!HasCapability(FrameworkCapability::Upscaler))
         return;

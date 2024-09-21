@@ -238,12 +238,6 @@ namespace cauldron
 
     void CameraComponent::LookAt(const Vec4& eyePos, const Vec4& lookAt)
     {
-        #pragma message("INFO: LookAt() is intentionally left empty. This esentially disables any manual camera movement.")
-        return; // Only we will be calling LookAtActual
-    }
-
-    void CameraComponent::LookAtActual(const Vec4& eyePos, const Vec4& lookAt)
-    {
         m_ViewMatrix    = LookAtMatrix(eyePos, lookAt, Vec4(0, 1, 0, 0));
         m_InvViewMatrix = inverse(m_ViewMatrix);
         m_pOwner->SetTransform(m_InvViewMatrix);
@@ -320,7 +314,7 @@ namespace cauldron
 
                 Vec4 eyePos = GetTorusPosition(animData.p, animData.q, animData.xo, animData.yo, animData.zo, animationTime);
                 Vec4 lookAt = Vec4(animData.lx, animData.ly, animData.lz, 1.f);
-                LookAtActual(eyePos, lookAt);
+                LookAt(eyePos, lookAt);
             }
 
             // Do camera update (Updates will be made to View matrix - similar to Cauldron 1 - and then pushed up to owner via InvViewMatrix)
@@ -430,7 +424,8 @@ namespace cauldron
                     }
                 }
 
-                LookAt(eyePos, lookAt);
+                if (!animData.enabled)
+                    LookAt(eyePos, lookAt);
                 UpdateMatrices();
             }
 

@@ -112,7 +112,9 @@ def get_config(mode, opts):
         tmp["FidelityFX FSR"]["Content"]["Scenes"] = [
             "../media/BistroInterior/BistroInrterior.gltf"
         ]
-        tmp["FidelityFX FSR"]["Content"]["Camera"] = "Camera_6" # 5 is visually better but 6 is more GPU intensive
+        tmp["FidelityFX FSR"]["Content"][
+            "Camera"
+        ] = "Camera_6"  # 5 is visually better but 6 is more GPU intensive
     else:
         raise ValueError("Invalid scene")
 
@@ -130,7 +132,7 @@ def get_config(mode, opts):
     spd = 0.002 * 60 / opts.fps
     if opts.scene == "Sponza":
         tmp["FidelityFX FSR"]["Content"]["Animation"] = {
-            "Enabled": True,
+            "Enabled": not opts.disable_animation,
             "p": 12.0,
             "q": 3.0,
             "xo": 2.0,
@@ -143,7 +145,7 @@ def get_config(mode, opts):
         }
     elif opts.scene == "Brutalism":
         tmp["FidelityFX FSR"]["Content"]["Animation"] = {
-            "Enabled": True,
+            "Enabled": not opts.disable_animation,
             "p": 10.0,
             "q": 3.0,
             "xo": 1.0,
@@ -156,7 +158,7 @@ def get_config(mode, opts):
         }
     elif opts.scene == "Bistro":
         tmp["FidelityFX FSR"]["Content"]["Animation"] = {
-            "Enabled": True,
+            "Enabled": not opts.disable_animation,
             "p": 3,
             "q": 1,
             "xo": -0.05,
@@ -305,6 +307,12 @@ def parse_args():
         action="store_true",
         default=False,
         help="Hide the UI, indirectly enabled by --stream",
+    )
+    parser.add_argument(
+        "--disable-animation",
+        action="store_true",
+        default=False,
+        help="Disable the animation for the camera",
     )
     parser.add_argument(
         "--disable-supplementary",

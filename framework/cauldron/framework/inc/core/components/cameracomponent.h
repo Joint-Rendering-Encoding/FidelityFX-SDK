@@ -388,7 +388,6 @@ namespace cauldron
 
         void UpdateYawPitch();
         void LookAt(const Vec4& eyePos, const Vec4& lookAt);
-        void LookAtActual(const Vec4& eyePos, const Vec4& lookAt);
 
         Mat4 CalculatePerspectiveMatrix();
         Mat4 CalculateOrthogonalMatrix();

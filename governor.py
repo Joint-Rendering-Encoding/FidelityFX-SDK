@@ -72,6 +72,14 @@ with open(
     config = json.load(f)
 
 
+with open(
+    os.path.join(SCRIPT_DIR, "framework/cauldron/framework/config/cauldronconfig.json"),
+    "r",
+    encoding="utf-8",
+) as f:
+    framework_config = json.load(f)
+
+
 def utcnow_iso8601():
     return datetime.now(timezone.utc).isoformat()
 
@@ -79,6 +87,7 @@ def utcnow_iso8601():
 # Prepare the config
 def get_config(mode, opts):
     tmp = copy.deepcopy(config)
+    tmp_framework = copy.deepcopy(framework_config)
 
     # Apply mode specific settings
     tmp["FidelityFX FSR"]["Remote"]["Mode"] = mode
@@ -208,14 +217,33 @@ def get_config(mode, opts):
     else:
         del tmp["FidelityFX FSR"]["Stream"]
 
-    return tmp
+    # Modify the allocations
+    if mode == "Upscaler":
+        tmp_framework["Cauldron"]["Allocations"] = {
+            "UploadHeapSize": 41943040,  # / 10
+            "DynamicBufferPoolSize": 7864320,
+            "GPUSamplerViewCount": 300,
+            "GPUResourceViewCount": 6000,  # / 10
+            "CPUResourceViewCount": 5000,  # / 10
+            "CPURenderViewCount": 100,
+            "CPUDepthViewCount": 100,
+        }
+
+    return {
+        "sample": tmp,
+        "framework": tmp_framework,
+    }
 
 
 def apply_config(config_data):
     with open(
         os.path.join(FSR_DIR, "configs/fsrconfig.json"), "w", encoding="utf-8"
     ) as config_file:
-        json.dump(config_data, config_file, indent=4)
+        json.dump(config_data["sample"], config_file, indent=4)
+    with open(
+        os.path.join(FSR_DIR, "configs/cauldronconfig.json"), "w", encoding="utf-8"
+    ) as config_file:
+        json.dump(config_data["framework"], config_file, indent=4)
 
 
 def parse_args():

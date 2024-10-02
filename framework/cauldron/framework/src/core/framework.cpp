@@ -619,7 +619,7 @@ namespace cauldron
         // Special case for detached mode, we have to wait for all buffers to be consumed before we can exit
         if (IsOnlyCapability(FrameworkCapability::Renderer))
         {
-            while (!CanExit())
+            while (!CanExit() && !m_Config.Streaming)
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 

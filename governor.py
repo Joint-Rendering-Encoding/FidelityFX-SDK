@@ -308,6 +308,12 @@ def parse_args():
         help="Upscaler to use",
     )
     parser.add_argument(
+        "--skip-renderer",
+        action="store_true",
+        default=False,
+        help="Skip the renderer process",
+    )
+    parser.add_argument(
         "--skip-upscaler",
         action="store_true",
         default=False,
@@ -526,35 +532,38 @@ def main(opts):
     mode = "Default" if opts.use_default else "Renderer"
     renderer_config = get_config(mode, opts)
     apply_config(renderer_config)
-    renderer = subprocess.Popen(
-        [
-            os.path.join(FSR_DIR, exe_name),
-            *get_process_args(
-                mode,
-                screenshot_mode=opts.screenshot,
-                duration=opts.benchmark * opts.fps,
-                has_fg=opts.upscaler in FRAME_GENERATION,
-                hide_ui=opts.hide_ui,
-            ),
-        ],
-        cwd=FSR_DIR,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        stdin=subprocess.DEVNULL,
-    )
-    if opts.structured_logs:
-        print("RENDERER_PID", renderer.pid)
-        sys.stdout.flush()
-    else:
-        print(f"Renderer PID: {renderer.pid}")
+    if not opts.skip_renderer:
+        renderer = subprocess.Popen(
+            [
+                os.path.join(FSR_DIR, exe_name),
+                *get_process_args(
+                    mode,
+                    screenshot_mode=opts.screenshot,
+                    duration=opts.benchmark * opts.fps,
+                    has_fg=opts.upscaler in FRAME_GENERATION,
+                    hide_ui=opts.hide_ui,
+                ),
+            ],
+            cwd=FSR_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+        if opts.structured_logs:
+            print("RENDERER_PID", renderer.pid)
+            sys.stdout.flush()
+        else:
+            print(f"Renderer PID: {renderer.pid}")
 
-    # Wait until the renderer is ready
-    os.set_blocking(renderer.stdout.fileno(), False)
-    while True:
-        line = renderer.stdout.readline()
-        if b"Running" in line:
-            break
-        time.sleep(0.1)
+        # Wait until the renderer is ready
+        os.set_blocking(renderer.stdout.fileno(), False)
+        while True:
+            line = renderer.stdout.readline()
+            if b"Running" in line:
+                break
+            time.sleep(0.1)
+    else:
+        input("Press Enter to continue...")
 
     # Default mode implies skipping the upscaler
     skip_upscaler = opts.skip_upscaler
@@ -609,22 +618,24 @@ def main(opts):
             print("Cleaning up...")
 
         # Try to gracefully close the processes
-        if renderer.poll() is None:
+        if not opts.skip_renderer and renderer.poll() is None:
             close_by_pid(renderer.pid)
+
+            # Wait for 5 seconds for the renderer to close
+            start_time = time.time()
+            while renderer.poll() is None and time.time() - start_time < 5:
+                time.sleep(0.1)
 
         if not opts.skip_upscaler and upscaler.poll() is None:
             close_by_pid(upscaler.pid)
 
-        # Wait for the processes to close
-        start_time = time.time()
-        while (
-            renderer.poll() is None
-            or (not opts.skip_upscaler and upscaler.poll() is None)
-        ) and time.time() - start_time < 10:
-            time.sleep(0.1)
+            # Wait for 5 seconds for the upscaler to close
+            start_time = time.time()
+            while upscaler.poll() is None and time.time() - start_time < 5:
+                time.sleep(0.1)
 
         # Kill the processes if they are still running
-        if renderer.poll() is None:
+        if not opts.skip_renderer and renderer.poll() is None:
             renderer.kill()
 
         if not opts.skip_upscaler and upscaler.poll() is None:
@@ -641,7 +652,7 @@ def main(opts):
 
         # Get the return codes
         return_codes = {
-            "renderer": renderer.returncode,
+            "renderer": renderer.returncode if not opts.skip_renderer else None,
             "upscaler": upscaler.returncode if not opts.skip_upscaler else None,
         }
 
@@ -684,7 +695,11 @@ def main(opts):
         sys.stdout.flush()
     while True:
         # Check if the renderer is still running
-        if renderer.poll() is not None:
+        if not opts.skip_renderer and renderer.poll() is not None:
+            break
+
+        # Check if the upscaler is still running
+        if not opts.skip_upscaler and upscaler.poll() is not None:
             break
 
         # If mouse is within jiggling range, move it
@@ -714,12 +729,13 @@ def main(opts):
             cleanup(None, None, non_zero=True)
             break
 
-        # Check if the upscaler is still running
-        if not opts.skip_upscaler and upscaler.poll() is not None:
-            break
-
         # Check telemetry
-        processes = [renderer] + ([upscaler] if not opts.skip_upscaler else [])
+        processes = []
+        if not opts.skip_renderer:
+            processes.append(renderer)
+        if not opts.skip_upscaler:
+            processes.append(upscaler)
+
         while processes:
             p = processes[-1]
             line = p.stdout.readline()
@@ -773,6 +789,9 @@ if __name__ == "__main__":
         assert (
             args.screenshot != "video"
         ), "Cannot use screenshot for video in comparison mode"
+
+    if args.skip_renderer and args.skip_upscaler:
+        raise ValueError("Both renderer and upscaler cannot be skipped")
 
     # Run with the requested arguments
     test_pid = main(args)

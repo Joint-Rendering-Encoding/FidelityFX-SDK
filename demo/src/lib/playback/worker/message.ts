@@ -79,7 +79,7 @@ export interface ToWorker {
 
     // Session data
     id?: number
-    type?: "timings"
+    type?: "timings" | "skips"
 
 	/*
 	// Sent to control playback
@@ -96,6 +96,7 @@ export interface FromWorker {
     // Session data
     id?: number
     timings?: Record<number, number>
+    skips?: number[]
 }
 
 /*

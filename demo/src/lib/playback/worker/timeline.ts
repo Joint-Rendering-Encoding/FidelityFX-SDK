@@ -29,7 +29,10 @@ export class Component {
 	frames: ReadableStream<Frame>
 	#segments: TransformStream<Segment, Segment>
 
+    skips: number[]
+
 	constructor() {
+        this.skips = []
 		this.frames = new ReadableStream({
 			pull: this.#pull.bind(this),
 			cancel: this.#cancel.bind(this),
@@ -88,6 +91,7 @@ export class Component {
 				} else {
 					// Our segment is newer than the current, cancel the old one.
 					await this.#current.frames.cancel("skipping segment; too slow")
+                    this.skips.push((performance.now() + performance.timeOrigin) * 1000)
 				}
 			}
 

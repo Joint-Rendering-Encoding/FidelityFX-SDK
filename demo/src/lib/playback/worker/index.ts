@@ -35,6 +35,9 @@ class Worker {
                 case "timings":
                     postMessage({ id: msg.id, timings: this.#video?.timings })
                     break
+                case "skips":
+                    postMessage({ id: msg.id, skips: this.#timeline?.video.skips })
+                    break
                 default:
                     throw new Error(`unknown type: ${msg.type}`)
             }

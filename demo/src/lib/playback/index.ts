@@ -151,6 +151,7 @@ export class Player {
     async getSessionData() {
         return {
             timings: await this.#backend.communicate({ type: "timings" }),
+            skips: await this.#backend.communicate({ type: "skips" }),
             stats: this.#client.stats,
         }
     }

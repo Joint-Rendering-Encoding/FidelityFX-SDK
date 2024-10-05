@@ -23,8 +23,9 @@ function App() {
 
     const handleSessionData = async () => {
         if (!player.current) return;
-        const { stats, timings } = await player.current.getSessionData();
-        await fetch(`http://${window.location.hostname}:12000/sink`, {
+        const { stats, timings, skips } = await player.current.getSessionData();
+        const overridenHost = new URL(window.location.href).searchParams.get("sinkHost") || window.location.hostname;
+        await fetch(`http://${overridenHost}:12000/sink`, {
             method: "POST",
             mode: "no-cors",
             headers: {
@@ -34,6 +35,7 @@ function App() {
                 name: "live",
                 stats,
                 timings,
+                skips
             }),
         });
     };

@@ -311,7 +311,7 @@ namespace cauldron
             ImGui::Text("Driver      : %S", pDevice->GetDriverVersion());
             ImGui::Text("CPU         : %S", pFwrk->GetCPUName());
 
-                        if (GetFramework()->FrameInterpolationEnabled())
+            if (GetFramework()->FrameInterpolationEnabled() && cpuTimings.size() > 1)
             {
                 static std::chrono::nanoseconds cpuTimestamp  = cpuTimings[0].EndTime;
                 static uint64_t                 renderFrames  = GetFramework()->GetFrameID();

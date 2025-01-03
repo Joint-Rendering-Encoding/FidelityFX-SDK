@@ -99,6 +99,7 @@ add_subdirectory(libs/stb)
 add_subdirectory(libs/vectormath)
 add_subdirectory(libs/pix)
 add_subdirectory(libs/streamlinesdk)
+add_subdirectory(libs/tsr)
 
 #Add sources
 find_package(Vulkan REQUIRED)

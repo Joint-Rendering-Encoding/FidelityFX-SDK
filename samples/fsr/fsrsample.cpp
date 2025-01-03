@@ -23,7 +23,7 @@
 #include "fsr2rendermodule.h"
 #include "fsr3upscalerendermodule.h"
 #include "fsr3rendermodule.h"
-#include "fsrremoterendermodule.h"
+#include "tsrrendermodule.h"
 #include "dlssupscalerendermodule.h"
 #include "dlssrendermodule.h"
 #include "upscalerendermodule.h"
@@ -45,6 +45,8 @@
 #include "misc/fileio.h"
 #include "render/device.h"
 #include "misc/assert.h"
+
+#include "validation_remap.h"
 
 using namespace cauldron;
 
@@ -95,12 +97,12 @@ void FSRSample::ParseSampleConfig()
     // Get the sample configuration
     json configData = sampleConfig["FidelityFX FSR"];
 
-    // Parse remote related config
-    json remoteConfig = configData["Remote"];
+    // Parse TSR related config
+    json tsrConfig = configData["TSR"];
 
-    // Parse the remote config for framework capabilities
+    // Parse the TSR config for framework capabilities
     FrameworkCapability capability = FrameworkCapability::None;
-    std::string opMode = remoteConfig["Mode"];
+    std::string opMode = tsrConfig["Mode"];
 
     if (opMode == "Renderer")
         capability |= FrameworkCapability::Renderer;
@@ -112,13 +114,13 @@ void FSRSample::ParseSampleConfig()
     SetCapabilities(capability);
 
     // Get the correct render modules
-    configData["RenderModules"] = remoteConfig["RenderModules"][opMode];
+    configData["RenderModules"] = tsrConfig["RenderModules"][opMode];
 
     // Get the correct render module overrides
-    configData["RenderModuleOverrides"] = remoteConfig["RenderModuleOverrides"][opMode];
+    configData["RenderModuleOverrides"] = tsrConfig["RenderModuleOverrides"][opMode];
 
     // Set the startup upscaler method
-    m_UIMethod = remoteConfig["Upscaler"].get<UpscaleMethod>();
+    m_UIMethod = tsrConfig["Upscaler"].get<UpscaleMethod>();
 
     // Let the framework parse all the "known" options for us
     ParseConfigData(configData);
@@ -127,8 +129,8 @@ void FSRSample::ParseSampleConfig()
 // Register sample's render modules so the factory can spawn them
 void FSRSample::RegisterSampleModules()
 {
-    // Register the remote render module
-    RenderModuleFactory::RegisterModule<FSRRemoteRenderModule>("FSRRemoteRenderModule");
+    // Register the TSR render module
+    RenderModuleFactory::RegisterModule<TSRRenderModule>("TSRRenderModule");
 
     // Common render modules
     rendermodule::RegisterCommonRenderModules();
@@ -159,9 +161,9 @@ void FSRSample::RegisterSampleModules()
 // Sample initialization point
 int32_t FSRSample::DoSampleInit()
 {
-    // Initialize the remote render module
-    m_pFSRRemoteRenderModule = static_cast<FSRRemoteRenderModule*>(GetFramework()->GetRenderModule("FSRRemoteRenderModule"));
-    CauldronAssert(ASSERT_CRITICAL, m_pFSRRemoteRenderModule, L"FidelityFX FSR Sample: Error: Could not find FSRRemote render module.");
+    // Initialize the TSR render module
+    m_pTSRRenderModule = static_cast<TSRRenderModule*>(GetFramework()->GetRenderModule("TSRRenderModule"));
+    CauldronAssert(ASSERT_CRITICAL, m_pTSRRenderModule, L"FidelityFX FSR Sample: Error: Could not find TSR render module.");
 
     // Register additional exports for translucency pass
     const Texture* pReactiveMask            = GetFramework()->GetRenderTexture(L"ReactiveMask");
@@ -232,7 +234,7 @@ int32_t FSRSample::DoSampleInit()
 
     // Set all other UI sections to collapse by default
     for (auto& section : GetUIManager()->GetGeneralLayout())
-        if (section.SectionName != "FPS Limiter" && section.SectionName != "FSR Remote")
+        if (section.SectionName != "FPS Limiter")
             section.defaultOpen = false;
 
     // Register upscale method picker picker

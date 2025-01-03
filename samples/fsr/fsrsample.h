@@ -25,7 +25,7 @@
 
 class DLSSRenderModule;
 class DLSSUpscaleRenderModule;
-class FSRRemoteRenderModule;
+class TSRRenderModule;
 class FSR3RenderModule;
 class FSR3UpscaleRenderModule;
 class FSR2RenderModule;
@@ -99,7 +99,7 @@ private:
 
     DLSSRenderModule*         m_pDLSSRenderModule        = nullptr;
     DLSSUpscaleRenderModule*  m_pDLSSUpscaleRenderModule = nullptr;
-    FSRRemoteRenderModule*    m_pFSRRemoteRenderModule   = nullptr;
+    TSRRenderModule*          m_pTSRRenderModule         = nullptr;
     FSR3RenderModule*         m_pFSR3RenderModule        = nullptr;
     FSR3UpscaleRenderModule*  m_pFSR3UpscaleRenderModule = nullptr;
     FSR2RenderModule*         m_pFSR2RenderModule        = nullptr;

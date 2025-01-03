@@ -5,6 +5,10 @@ This repository showcases a [sample](./samples/fsr/) implementation of the Detac
 -   [FSR (FidelityFX SDK)](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/55ff22bb6981a9b9c087b9465101769fc0acd447/readme.md)
 -   [DLSS (Streamline SDK)](https://github.com/NVIDIAGameWorks/Streamline/blob/c709dd9874e21dea100d6e2f2e109d16b87b8b55/README.md)
 
+## TransparentSR
+
+Although there are [many changes](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/compare/release-FSR3-3.0.4...DenizUgur:Detached-FSR-DLSS:fsr-dlss-remote) in this repository, the key feature is encapsulated in the [`TransparentSR`](framework/cauldron/framework/libs/tsr/) library. This library is responsible for managing the detachment of resources needed for upscaling. It can be used with any upscaler, not just FSR or DLSS.
+
 ## How to build the sample
 
 Building the sample is exactly the same as building the FidelityFX SDK. You can find the instructions [here](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/release-FSR3-3.0.4/docs/getting-started/building-samples.md). Be sure to build "Native-backed DLL" version.

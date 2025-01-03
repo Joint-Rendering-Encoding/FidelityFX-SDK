@@ -37,7 +37,7 @@ console in JSON format.
 pyautogui.FAILSAFE = False
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FSR_DIR = os.path.join(SCRIPT_DIR, "bin")
-FSR_REMOTE_SHARED_BUFFER_COUNT = 10
+TSR_SHARED_BUFFER_COUNT = 10
 
 UPSCALERS = [
     "Native",
@@ -90,7 +90,7 @@ def get_config(mode, opts):
     tmp_framework = copy.deepcopy(framework_config)
 
     # Apply mode specific settings
-    tmp["FidelityFX FSR"]["Remote"]["Mode"] = mode
+    tmp["FidelityFX FSR"]["TSR"]["Mode"] = mode
 
     # Apply present resolution settings
     tmp["FidelityFX FSR"]["Presentation"]["Width"] = opts.present_res[0]
@@ -130,10 +130,10 @@ def get_config(mode, opts):
     # Apply reduced motion settings
     if opts.reduced_motion:
         tmp["FidelityFX FSR"]["Content"]["ParticleSpawners"] = []
-        tmp["FidelityFX FSR"]["Remote"]["RenderModules"]["Default"].remove(
+        tmp["FidelityFX FSR"]["TSR"]["RenderModules"]["Default"].remove(
             "AnimatedTexturesRenderModule"
         )
-        tmp["FidelityFX FSR"]["Remote"]["RenderModules"]["Renderer"].remove(
+        tmp["FidelityFX FSR"]["TSR"]["RenderModules"]["Renderer"].remove(
             "AnimatedTexturesRenderModule"
         )
 
@@ -188,7 +188,7 @@ def get_config(mode, opts):
         del tmp["FidelityFX FSR"]["Content"]["SpecularIBL"]
 
     # Apply upscaler settings
-    tmp["FidelityFX FSR"]["Remote"]["Upscaler"] = UPSCALERS.index(opts.upscaler)
+    tmp["FidelityFX FSR"]["TSR"]["Upscaler"] = UPSCALERS.index(opts.upscaler)
 
     # Apply render settings
     tmp["FidelityFX FSR"]["Render"] = {
@@ -199,10 +199,10 @@ def get_config(mode, opts):
 
     # Apply DLSS settings
     if "DLSS" in opts.upscaler:
-        tmp["FidelityFX FSR"]["Remote"]["RenderModuleOverrides"]["Default"][
+        tmp["FidelityFX FSR"]["TSR"]["RenderModuleOverrides"]["Default"][
             "DLSSUpscaleRenderModule"
         ]["mode"] = (DLSS_MODES.index(opts.dlssMode) + 1)
-        tmp["FidelityFX FSR"]["Remote"]["RenderModuleOverrides"]["Upscaler"][
+        tmp["FidelityFX FSR"]["TSR"]["RenderModuleOverrides"]["Upscaler"][
             "DLSSUpscaleRenderModule"
         ]["mode"] = (DLSS_MODES.index(opts.dlssMode) + 1)
 
@@ -456,9 +456,9 @@ def get_process_args(
         if mode != "Default" and has_fg:
             # BUG: Upscaler gets blocked for buffer count. Running for 10 more frames to avoid this.
             # Weird thing is that this is only needed for frame generation upscalers.
-            #! Might only be needed if FSR_REMOTE_SHARED_BUFFER_COUNT (m_BufferIndex) is more than 1
+            #! Might only be needed if TSR_SHARED_BUFFER_COUNT (m_BufferIndex) is more than 1
             # For video, we set it to 1 anyway.
-            # duration += FSR_REMOTE_SHARED_BUFFER_COUNT
+            # duration += TSR_SHARED_BUFFER_COUNT
             pass
         process_args.append(f"duration={duration}")
     return process_args

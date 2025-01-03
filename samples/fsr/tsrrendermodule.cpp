@@ -1,4 +1,4 @@
-#include "fsrremoterendermodule.h"
+#include "tsrrendermodule.h"
 #include "validation_remap.h"
 #include "render/device.h"
 #include "render/dynamicresourcepool.h"
@@ -7,16 +7,31 @@
 #include "render/uploadheap.h"
 #include "core/scene.h"
 
+// We need to include internal headers to access the DX12 resources
+#include "render/dx12/gpuresource_dx12.h"
+#include "render/renderdefines.h"
+#include "render/texture.h"
+
 #include <functional>
 
 using namespace cauldron;
 
-void FSRRemoteRenderModule::Init(const json& initData)
+TSRGraphicsResource TSRRenderModule::getTSRResourceFromTexture(const cauldron::Texture* res) const
+{
+    const auto&         impl       = res->GetResource();
+    D3D12_RESOURCE_DESC desc       = impl->GetImpl()->DX12Desc();
+    ResourceFormat      format     = impl->GetTextureResource()->GetFormat();
+    DXGI_FORMAT         dxgiFormat = GetDXGIFormat(format);
+
+    return TSRGraphicsResource{impl->GetImpl()->DX12Resource(), desc, GetResourceFormatStride(format), dxgiFormat};
+}
+
+void TSRRenderModule::Init(const json& initData)
 {
     //////////////////////////////////////////////////////////////////////////
     // Resource setup
 
-    // Check remote mode
+    // Check TSR mode
     m_UpscalerModeEnabled = GetFramework()->IsOnlyCapability(FrameworkCapability::Upscaler);
     m_RendererModeEnabled = GetFramework()->IsOnlyCapability(FrameworkCapability::Renderer);
     m_OnlyResizing        = GetFramework()->HasCapability(FrameworkCapability::Renderer | FrameworkCapability::Upscaler);
@@ -37,35 +52,36 @@ void FSRRemoteRenderModule::Init(const json& initData)
     if (m_RendererModeEnabled)
     {
         // Register the outbound data transfer callback
-        ExecuteCallback callbackPreSwap      = std::bind(&FSRRemoteRenderModule::OutboundDataTransfer, this, std::placeholders::_1, std::placeholders::_2);
-        ExecutionTuple  callbackPreSwapTuple = std::make_pair(L"FSRRemoteRenderModule::PreSwapChain", std::make_pair(this, callbackPreSwap));
+        ExecuteCallback callbackPreSwap      = std::bind(&TSRRenderModule::OutboundDataTransfer, this, std::placeholders::_1, std::placeholders::_2);
+        ExecutionTuple  callbackPreSwapTuple = std::make_pair(L"TSRRenderModule::PreSwapChain", std::make_pair(this, callbackPreSwap));
         GetFramework()->RegisterExecutionCallback(L"SwapChainRenderModule", true, callbackPreSwapTuple);
     }
 
     if (!m_OnlyResizing)
     {
-        // Create DX12Ops
-        m_DX12Ops = std::make_unique<DX12Ops>();
+        // Create TSROps
+        m_TSROps = std::make_unique<TSROps>(GetFramework()->GetName(),
+                                            GetDevice()->GetImpl()->DX12Device(),
+                                            GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics),
+                                            GetFramework()->GetBufferCount());
 
         // Intialize the shared buffers
-        m_DX12Ops->CreateSharedBuffers(getFSRResources(), !m_UpscalerModeEnabled);
+        m_TSROps->CreateSharedBuffers(getFSRResources(), !m_UpscalerModeEnabled);
 
         // The framework will run MainLoop based on the outcome of this function
         GetFramework()->SetReadyFunction([this]() {
             uint64_t bufferIndex = GetFramework()->GetBufferIndex();
             if (m_RendererModeEnabled)
-                return m_DX12Ops->bufferStateMatches(bufferIndex, DX12Ops::BufferState::IDLE);
+                return m_TSROps->bufferStateMatches(bufferIndex, TSROps::BufferState::IDLE);
             else
-                return m_DX12Ops->bufferStateMatches(bufferIndex, DX12Ops::BufferState::READY);
+                return m_TSROps->bufferStateMatches(bufferIndex, TSROps::BufferState::READY);
         });
     }
 
     if (m_RendererModeEnabled)
     {
         // The framework will only exit if there's no buffer to consume anymore
-        GetFramework()->SetCanExitFunction([this]() {
-            return m_DX12Ops->bufferStateMatchesAll(DX12Ops::BufferState::IDLE);
-        });
+        GetFramework()->SetCanExitFunction([this]() { return m_TSROps->bufferStateMatchesAll(TSROps::BufferState::IDLE); });
     }
 
     // On Renderer, enable upscaling
@@ -87,14 +103,14 @@ void FSRRemoteRenderModule::Init(const json& initData)
     SetModuleReady(true);
 }
 
-FSRRemoteRenderModule::~FSRRemoteRenderModule()
+TSRRenderModule::~TSRRenderModule()
 {
     // Protection
     if (ModuleEnabled())
         EnableModule(false);
 }
 
-void FSRRemoteRenderModule::OnResize(const ResolutionInfo& resInfo)
+void TSRRenderModule::OnResize(const ResolutionInfo& resInfo)
 {
     if (!ModuleEnabled() || resInfo.RenderWidth == m_RenderWidth && resInfo.RenderHeight == m_RenderHeight)
         return;
@@ -114,7 +130,7 @@ void FSRRemoteRenderModule::OnResize(const ResolutionInfo& resInfo)
     });
 }
 
-void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
+void TSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 {
     // Skip if we are in only resizing mode
     if (m_OnlyResizing)
@@ -128,22 +144,22 @@ void FSRRemoteRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     GetFramework()->SetUpscalingState(UpscalerState::PostUpscale);
 }
 
-void FSRRemoteRenderModule::InboundDataTransfer(double deltaTime, CommandList* pCmdList)
+void TSRRenderModule::InboundDataTransfer(double deltaTime, CommandList* pCmdList)
 {
-    GPUScopedProfileCapture sampleMarker(pCmdList, L"FSR Remote (Inbound)");
+    GPUScopedProfileCapture sampleMarker(pCmdList, L"TSR (Inbound)");
 
     // Main loop never runs if there is no available buffer, so we can assume next buffer is in READY state
     // Transfer the resources from the shared buffer to this process
     uint64_t bufferIndex = GetFramework()->GetBufferIndex();
-    m_DX12Ops->TransferFromSharedBuffer(getFSRResources(), bufferIndex, pCmdList);
+    m_TSROps->TransferFromSharedBuffer(getFSRResources(), bufferIndex, pCmdList->GetImpl()->DX12CmdList());
 }
 
-void FSRRemoteRenderModule::OutboundDataTransfer(double deltaTime, CommandList* pCmdList)
+void TSRRenderModule::OutboundDataTransfer(double deltaTime, CommandList* pCmdList)
 {
-    GPUScopedProfileCapture sampleMarker(pCmdList, L"FSR Remote (Outbound)");
+    GPUScopedProfileCapture sampleMarker(pCmdList, L"TSR (Outbound)");
 
     // Main loop never runs if there is no available buffer, so we can assume next buffer is in IDLE state
     // Transfer the resources from this process to the shared buffer
     uint64_t bufferIndex = GetFramework()->GetBufferIndex();
-    m_DX12Ops->TransferToSharedBuffer(getFSRResources(), bufferIndex, pCmdList);
+    m_TSROps->TransferToSharedBuffer(getFSRResources(), bufferIndex, pCmdList->GetImpl()->DX12CmdList());
 }

@@ -67,6 +67,9 @@ using json = nlohmann::ordered_json;
 #include <xstring>
 #include <functional>
 
+// TSR is needed in framework as well
+#include <tsr.h>
+
 namespace cauldron
 {
     /**

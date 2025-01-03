@@ -121,61 +121,22 @@ namespace cauldron
         m_PrevViewMatrix = m_ViewMatrix;
         m_PrevViewProjectionMatrix = m_ViewProjectionMatrix;
         m_PrevProjJittered         = m_ProjJittered;
-    }
-
-    CameraComponent::~CameraComponent()
-    {
-
-    }
-
-    void CameraComponent::MapSharedData()
-    {
-        // Only map shared data if we haven't already
-        if (m_pSharedData[0] != nullptr)
-            return;
 
         // Get the safe process name
         std::wstring processName = GetFramework()->GetName();
         processName.replace(processName.find(L' '), 1, L"_");
         std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-        std::string processNameA = converter.to_bytes(processName);
+        std::string                                      processNameA = converter.to_bytes(processName);
 
         // Create the shared data name
         std::stringstream sharedDataName;
-        sharedDataName << "Local\\" << processNameA << "_SharedCameraData";
-
-        // Create or open the shared memory file mapping
-        m_hSharedData = CreateFileMapping(
-            INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(ShareableCameraData) * GetFramework()->GetBufferCount(), sharedDataName.str().c_str());
-        CauldronAssert(ASSERT_CRITICAL, m_hSharedData, L"Failed to create shared data file mapping: %d", GetLastError());
-
-        // Map the shared memory file mapping into our address space
-        m_pSharedView = MapViewOfFile(m_hSharedData, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(ShareableCameraData) * GetFramework()->GetBufferCount());
-        CauldronAssert(ASSERT_CRITICAL, m_pSharedData, L"Failed to map shared data file mapping: %d", GetLastError());
-
-        // Initialize shared data, if not already done
-        for (size_t i = 0; i < GetFramework()->GetBufferCount(); i++)
-        {
-            if (m_pSharedData[i] == nullptr)
-                m_pSharedData[i] = reinterpret_cast<ShareableCameraData*>(reinterpret_cast<uint8_t*>(m_pSharedView) + (sizeof(ShareableCameraData) * i));
-        }
+        sharedDataName << processNameA << "_SharedCameraData";
+        m_SharedDataName = sharedDataName.str();
     }
 
-    void CameraComponent::UnmapSharedData()
+    CameraComponent::~CameraComponent()
     {
-        if (m_pSharedData[0])
-        {
-            UnmapViewOfFile(m_pSharedView);
-            m_pSharedView = nullptr;
-            for (size_t i = 0; i < GetFramework()->GetBufferCount(); i++)
-                m_pSharedData[i] = nullptr;
-        }
 
-        if (m_hSharedData)
-        {
-            CloseHandle(m_hSharedData);
-            m_hSharedData = nullptr;
-        }
     }
 
     void CameraComponent::ResetCamera()
@@ -286,7 +247,11 @@ namespace cauldron
         {
             // If we are not in default mode, map shared data
             if (!GetFramework()->HasCapability(FrameworkCapability::Renderer | FrameworkCapability::Upscaler))
-                MapSharedData();
+            {
+                // Create or open the shared memory file mapping
+                tsr_map_udta(
+                    m_SharedDataName, sizeof(ShareableCameraData), GetFramework()->GetBufferCount(), m_hSharedData, m_pSharedView, (void**)m_pSharedData);
+            }
 
             // Read the next shared data slot
             if (GetFramework()->IsOnlyCapability(FrameworkCapability::Upscaler))
@@ -444,7 +409,7 @@ namespace cauldron
         {
             // Don't leave shared data mapped if we don't need it
             if (!GetFramework()->HasCapability(FrameworkCapability::Renderer | FrameworkCapability::Upscaler))
-                UnmapSharedData();
+                tsr_unmap_udta(m_pSharedView, m_hSharedData, (void**)m_pSharedData, GetFramework()->GetBufferCount());
         }
     }
 

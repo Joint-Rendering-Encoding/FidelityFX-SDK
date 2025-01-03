@@ -39,7 +39,7 @@
             }
         },
 
-        "Remote": {
+        "TSR": {
             "Mode": "Default",
             "Upscaler": 6,
             "RenderModules": {
@@ -60,7 +60,7 @@
                     "UpscaleRenderModule",
                     "ToneMappingRenderModule",
                     "FSR1RenderModule",
-                    "FSRRemoteRenderModule"
+                    "TSRRenderModule"
                 ],
                 "Renderer": [
                     "SkyDomeRenderModule",
@@ -71,11 +71,11 @@
                     "TranslucencyRenderModule",
                     "GPUParticleRenderModule",
                     "ToneMappingRenderModule",
-                    "FSRRemoteRenderModule"
+                    "TSRRenderModule"
                 ],
                 "Upscaler": [
                     "GBufferRenderModule",
-                    "FSRRemoteRenderModule",
+                    "TSRRenderModule",
                     "TranslucencyRenderModule",
                     "TAARenderModule",
                     "FSR2RenderModule",

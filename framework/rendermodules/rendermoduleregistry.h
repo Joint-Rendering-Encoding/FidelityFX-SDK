@@ -34,7 +34,7 @@ namespace rendermodule
     /// @ingroup RenderModules
     void RegisterAvailableRenderModules();
 
-    /// Registers the commonly used render modules used by FSR Remote.
+    /// Registers the commonly used render modules used by TSR.
     void RegisterCommonRenderModules();
 
 } // namespace rendermodule

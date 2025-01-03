@@ -189,16 +189,6 @@ namespace cauldron
         virtual ~CameraComponent();
 
         /**
-         * @brief   Opens the shared handle and maps the shared data.
-         */
-        void MapSharedData();
-
-        /**
-         * @brief   Unmaps the shared data and closes the shared handle.
-         */
-        void UnmapSharedData();
-
-        /**
          * @brief   Gets the shareable camera data.
          */
         const ShareableCameraData GetShareableData() const
@@ -399,9 +389,10 @@ namespace cauldron
         CameraComponentData*    m_pData;
 
         // Shared data handle and view
-        HANDLE   m_hSharedData = nullptr;
-        LPVOID   m_pSharedView = nullptr;
-        ShareableCameraData* m_pSharedData[FSR_REMOTE_SHARED_BUFFER_MAX] = {nullptr};
+        std::string m_SharedDataName;
+        HANDLE      m_hSharedData = nullptr;
+        LPVOID      m_pSharedView = nullptr;
+        ShareableCameraData* m_pSharedData[TSR_SHARED_BUFFER_MAX] = {nullptr};
 
         const Mat4  m_ResetMatrix = Mat4::identity(); // Used to reset camera to initial state
         float       m_Distance = 1.f;                 // Distance to look at

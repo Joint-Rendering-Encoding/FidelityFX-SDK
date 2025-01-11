@@ -6,7 +6,7 @@ various upscalers with games _without_ changing their source code.
 
 The following figure presents a high-level illustration of TransparentSR. 
 
-XXXX, it will be good if you include an overview figure (maybe similar to the one you developed before). the figure should have clearly show the possibility of using multiple SR models. XXX
+XXXX, it will be good if you include an overview figure (maybe Fig 3 in our paper). 
 
 
 The details of TransparentSR are published in the following paper: 
